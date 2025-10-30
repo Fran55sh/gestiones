@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ficha de Cliente - Gestor de Cobranzas</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* Personalización de Tailwind para mantener coherencia */
+        .gradient-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .card-shadow-hover:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        
+        /* Estados con colores coherentes */
+        .status-badge {
+            padding: 0.375rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .status-sin-gestion {
+            background-color: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        .status-contactado {
+            background-color: #dbeafe;
+            color: #2563eb;
+        }
+        
+        .status-con-arreglo {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        
+        .status-incobrable {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .status-de-baja {
+            background-color: #e5e7eb;
+            color: #6b7280;
+        }
+        
+        /* Ocultar flechas del input number */
+        #go-to-number::-webkit-outer-spin-button,
+        #go-to-number::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        #go-to-number {
+            appearance: textfield;
+            -moz-appearance: textfield;
+        }
+        
+        /* Estilos para el dropdown personalizado de carteras */
+        #cartera-dropdown-menu {
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <!-- ENCABEZADO FIJO -->
+    <header class="gradient-primary text-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4">
+            <!-- Primera fila: Info del cliente y controles principales -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                    <button onclick="window.location.href='/dashboard-gestor'" class="p-2 rounded-lg hover:bg-white/20 transition-colors">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold" id="client-name-header">Carlos Mendoza</h1>
+                        <p class="text-sm opacity-90">
+                            ID: <span id="client-id-header">#12345</span> | 
+                            DNI: <span id="client-dni-header">12.345.678</span> |
+                            Nº ID: <span id="client-numero-id-header">FAV-001</span>
+                        </p>
+                </div>
+            </div>
+                <div class="flex items-center gap-3">
+                    <!-- SELECTOR DE CARTERA - DROPDOWN PERSONALIZADO -->
+                    <div class="relative">
+                        <button 
+                            id="cartera-dropdown-btn"
+                            onclick="toggleCarteraDropdown()"
+                            class="px-4 py-2 pr-10 bg-white text-purple-600 rounded-lg font-semibold cursor-pointer outline-none text-sm border-2 border-white/30 hover:border-white/50 focus:ring-2 focus:ring-white/50 focus:border-white transition-all w-full flex items-center justify-between min-w-[140px]"
+                        >
+                            <span id="cartera-selected-text">📁 Favacard</span>
+                            <i data-lucide="chevron-down" id="cartera-chevron" class="w-4 h-4 text-purple-600 transition-transform"></i>
+                        </button>
+                        <div 
+                            id="cartera-dropdown-menu"
+                            class="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border-2 border-white/30 overflow-hidden z-50 hidden min-w-[140px]"
+                        >
+                            <button 
+                                onclick="selectCartera('favacard', '📁 Favacard')"
+                                class="w-full text-left px-4 py-2 text-sm font-semibold text-purple-600 hover:bg-purple-50 transition-colors"
+                            >
+                                📁 Favacard
+                            </button>
+                            <button 
+                                onclick="selectCartera('naldo', '📁 Naldo')"
+                                class="w-full text-left px-4 py-2 text-sm font-semibold text-purple-600 hover:bg-purple-50 transition-colors"
+                            >
+                                📁 Naldo
+                            </button>
+                            <button 
+                                onclick="selectCartera('naranjax', '📁 NaranjaX')"
+                                class="w-full text-left px-4 py-2 text-sm font-semibold text-purple-600 hover:bg-purple-50 transition-colors"
+                            >
+                                📁 NaranjaX
+                            </button>
+        </div>
+            </div>
+                    <button class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg font-semibold transition-colors flex items-center gap-2" onclick="saveAll()">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Guardar
+                    </button>
+                    <button onclick="window.location.href='/dashboard-gestor'" class="px-4 py-2 bg-white text-purple-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors">
+                        Volver al Listado
+                    </button>
+            </div>
+            </div>
+            
+            <!-- Segunda fila: Navegación y búsqueda -->
+            <div class="flex items-center justify-between gap-4 pt-4 border-t border-white/20">
+                <!-- Navegación entre clientes -->
+                <div class="flex items-center gap-3">
+                    <button 
+                        id="btn-prev-cliente" 
+                        onclick="navegarCliente('prev')"
+                        class="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Cliente anterior">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <div class="text-sm font-semibold min-w-[120px] text-center" id="cliente-counter">
+                        Cliente 1 de 4
+            </div>
+                    <button 
+                        id="btn-next-cliente" 
+                        onclick="navegarCliente('next')"
+                        class="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Siguiente cliente">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                    <!-- Ir a número de cliente -->
+                    <div class="flex items-center gap-2 ml-2 pl-2 border-l border-white/30">
+                        <span class="text-xs text-white/80 whitespace-nowrap">Ir a:</span>
+                        <input 
+                            type="number" 
+                            id="go-to-number"
+                            min="1"
+                            onkeydown="if(event.key==='Enter') { event.preventDefault(); irACliente(); }"
+                            class="w-16 px-2 py-1.5 bg-white/20 border border-white/30 rounded text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/50"
+                        >
+                        <button 
+                            onclick="irACliente()"
+                            class="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-sm font-semibold"
+                            title="Ir al cliente">
+                            Ir
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Búsqueda -->
+                <div class="flex items-center gap-2 flex-1 max-w-md">
+                    <div class="relative flex-1">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-white/70"></i>
+                        <input 
+                            type="text" 
+                            id="search-input"
+                            placeholder="Buscar por nombre, DNI o Nº ID..."
+                            onkeyup="buscarCliente(this.value)"
+                            onkeydown="if(event.key==='Enter') { event.preventDefault(); buscarCliente(this.value); }"
+                            class="w-full pl-10 pr-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/50"
+                        >
+                    </div>
+                    <button 
+                        onclick="limpiarBusqueda()"
+                        id="btn-clear-search"
+                        class="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                        title="Limpiar búsqueda"
+                        style="display: none;">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- RESUMEN GENERAL SUPERIOR -->
+    <section class="container mx-auto px-6 py-6">
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
+                        <i data-lucide="dollar-sign" class="w-6 h-6 text-purple-600"></i>
+            </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Monto Total</p>
+                        <p class="text-xl font-bold text-gray-900" id="summary-amount">$125,000</p>
+            </div>
+            </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        <i data-lucide="clipboard-check" class="w-6 h-6 text-blue-600"></i>
+            </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Estado Actual</p>
+                        <p class="text-lg font-semibold" id="summary-status">
+                            <span class="status-badge status-contactado">Contactado</span>
+                        </p>
+            </div>
+        </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
+                        <i data-lucide="calendar" class="w-6 h-6 text-green-600"></i>
+                </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Última Gestión</p>
+                        <p class="text-lg font-semibold text-gray-900" id="summary-last-management">Hace 2 días</p>
+                </div>
+            </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
+                        <i data-lucide="clock" class="w-6 h-6 text-orange-600"></i>
+            </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Días de Mora</p>
+                        <p class="text-xl font-bold text-gray-900" id="summary-days-overdue">45 días</p>
+        </div>
+            </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONTENIDO PRINCIPAL - DOS COLUMNAS -->
+    <main class="container mx-auto px-6 pb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+            
+            <!-- COLUMNA IZQUIERDA - DATOS DEL CLIENTE Y DEUDA -->
+            <div class="lg:col-span-2 flex flex-col space-y-6">
+                
+                <!-- TARJETA: DATOS DEL CLIENTE -->
+                <div class="bg-white rounded-xl shadow-sm p-6 card-shadow-hover transition-shadow flex-1" 
+                     id="client-info-card"
+                     hx-target="this"
+                     hx-swap="outerHTML">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="user" class="w-5 h-5 text-purple-600"></i>
+                        <h2 class="text-xl font-bold text-gray-900">Datos del Cliente</h2>
+                </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Nombre Completo</label>
+                            <div class="text-base font-semibold text-gray-900" id="client-name">Carlos Mendoza</div>
+                    </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Cartera Asignada</label>
+                            <div class="text-base font-semibold text-purple-600 flex items-center gap-2" id="client-cartera">
+                                <i data-lucide="folder" class="w-4 h-4"></i>
+                                Favacard
+                </div>
+                    </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Número de Identificación</label>
+                            <div class="text-base font-semibold text-purple-600" id="client-numero-id">FAV-001</div>
+                </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">DNI o CUIT</label>
+                            <div class="text-base font-semibold text-gray-900" id="client-dni">12.345.678</div>
+                    </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Teléfono</label>
+                            <div class="text-base text-gray-900 flex items-center gap-2" id="client-phone">
+                                <i data-lucide="phone" class="w-4 h-4 text-gray-400"></i>
+                                +54 11 4567-8901
+                </div>
+                    </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Email</label>
+                            <div class="text-base text-gray-900 flex items-center gap-2" id="client-email">
+                                <i data-lucide="mail" class="w-4 h-4 text-gray-400"></i>
+                                carlos.mendoza@email.com
+                    </div>
+                </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Dirección</label>
+                            <div class="text-base text-gray-900 flex items-center gap-2" id="client-address">
+                                <i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i>
+                                Av. Corrientes 1234, CABA
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Fecha de Nacimiento</label>
+                            <div class="text-base text-gray-900" id="client-birthdate">15/03/1985</div>
+                </div>
+            </div>
+        </div>
+
+                <!-- TARJETA: DATOS DE LA DEUDA -->
+                <div class="bg-white rounded-xl shadow-sm p-6 card-shadow-hover transition-shadow flex-1"
+                     id="debt-info-card"
+                     hx-target="this"
+                     hx-swap="outerHTML">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="file-text" class="w-5 h-5 text-purple-600"></i>
+                        <h2 class="text-xl font-bold text-gray-900">Datos de la Deuda</h2>
+            </div>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-2">Monto Total Adeudado</label>
+                                <div class="text-2xl font-bold text-gray-900" id="debt-total-amount">$125,000</div>
+        </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-2">Fecha de Vencimiento</label>
+                                <div class="text-base font-semibold text-gray-900" id="debt-due-date">15/12/2023</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-2">Fecha de Última Gestión</label>
+                                <div class="text-base text-gray-900" id="debt-last-management">05/01/2024</div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-2">Cuotas Pendientes / Pagadas</label>
+                                <div class="text-base font-semibold text-gray-900" id="debt-installments">
+                                    <span class="text-red-600">12</span> / <span class="text-green-600">8</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-gray-200">
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Entidad Financiera / Origen</label>
+                            <div class="text-base text-gray-900 font-semibold" id="debt-entity">Banco Nacional S.A.</div>
+                        </div>
+                        <div class="pt-2">
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Observaciones del Acreedor</label>
+                            <div class="text-base text-gray-700 bg-gray-50 rounded-lg p-4 border border-gray-200" id="debt-notes">
+                                Cliente con historial de pagos irregular. Última cuota pagada hace 6 meses. Presenta disposición a negociar.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUMNA DERECHA - GESTIÓN Y CONTROL -->
+            <div class="flex flex-col space-y-6">
+                
+                <!-- TARJETA: ESTADO DE GESTIÓN -->
+                <div class="bg-white rounded-xl shadow-sm p-6 card-shadow-hover transition-shadow flex-1"
+                     id="management-status-card"
+                     hx-target="this"
+                     hx-swap="outerHTML">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="clipboard-list" class="w-5 h-5 text-purple-600"></i>
+                        <h2 class="text-xl font-bold text-gray-900">Estado de Gestión</h2>
+            </div>
+                    
+                    <div class="space-y-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">Seleccionar Estado</label>
+                        <select 
+                            id="status-selector"
+                            class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-base font-semibold"
+                            onchange="updateStatusBadge(this.value)"
+                            hx-post="/api/update-status"
+                            hx-target="#management-status-card"
+                            hx-swap="outerHTML"
+                            hx-trigger="change"
+                            hx-indicator="#status-loading">
+                            <option value="sin-gestion">Sin Gestión</option>
+                            <option value="contactado" selected>Contactado</option>
+                            <option value="con-arreglo">Con Arreglo</option>
+                            <option value="incobrable">Incobrable</option>
+                            <option value="de-baja">De Baja</option>
+                        </select>
+                        
+                        <div class="flex items-center gap-2 text-sm text-gray-500" id="status-loading" style="display: none;">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                            Guardando estado...
+                </div>
+
+                        <div class="mt-4 pt-4 border-t border-gray-200">
+                            <p class="text-sm text-gray-600 mb-2">Estado Actual:</p>
+                            <div id="current-status-display">
+                                <span class="status-badge status-contactado">Contactado</span>
+                    </div>
+                    </div>
+                    </div>
+                    </div>
+
+                <!-- TARJETA: ASENTAR GESTIÓN -->
+                <div class="bg-white rounded-xl shadow-sm p-6 card-shadow-hover transition-shadow flex-1"
+                     id="management-form-card"
+                     hx-target="#management-history"
+                     hx-swap="afterbegin">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i data-lucide="edit" class="w-5 h-5 text-purple-600"></i>
+                        <h2 class="text-xl font-bold text-gray-900">Asentar Gestión</h2>
+                    </div>
+
+                    <form 
+                        id="management-form"
+                        hx-post="/api/register-management"
+                        hx-target="#management-history"
+                        hx-swap="afterbegin"
+                        hx-indicator="#save-management-loading"
+                        class="space-y-4">
+                        
+                        <div>
+                            <label for="management-note" class="block text-sm font-medium text-gray-700 mb-2">
+                                Registrar Nueva Gestión
+                            </label>
+                            <textarea 
+                                id="management-note"
+                                name="note"
+                                rows="6"
+                                class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all resize-none"
+                                placeholder="Escribe los detalles de la gestión realizada..."
+                                required></textarea>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 text-sm text-gray-500" id="save-management-loading" style="display: none;">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                            Guardando gestión...
+                    </div>
+
+                        <button 
+                            type="submit"
+                            class="w-full gradient-primary text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            Guardar Gestión
+                        </button>
+                    </form>
+                    </div>
+                    </div>
+                </div>
+
+        <!-- TARJETA: HISTORIAL DE GESTIONES - ANCHO COMPLETO -->
+        <div class="bg-white rounded-xl shadow-sm p-6 card-shadow-hover transition-shadow mt-6"
+             id="management-history-card">
+            <div class="flex items-center gap-3 mb-6">
+                <i data-lucide="history" class="w-5 h-5 text-purple-600"></i>
+                <h2 class="text-xl font-bold text-gray-900">Historial de Gestiones</h2>
+                    </div>
+
+            <div class="space-y-4 max-h-[600px] overflow-y-auto" id="management-history">
+                <!-- Gestión 1 -->
+                <div class="border-l-4 border-purple-500 pl-4 pb-4 last:pb-0">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                            <span class="text-sm font-semibold text-gray-900">Juan González</span>
+                    </div>
+                        <span class="text-xs text-gray-500">05/01/2024 - 10:30</span>
+                    </div>
+                    <p class="text-sm text-gray-700 leading-relaxed">
+                        Llamada realizada. Cliente informado sobre promesa de pago. Acepta negociar un plan de pago en cuotas. Solicita tiempo para evaluar propuesta.
+                    </p>
+                </div>
+
+                <!-- Gestión 2 -->
+                <div class="border-l-4 border-blue-500 pl-4 pb-4 last:pb-0">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                            <span class="text-sm font-semibold text-gray-900">Juan González</span>
+                    </div>
+                        <span class="text-xs text-gray-500">03/01/2024 - 14:15</span>
+                    </div>
+                    <p class="text-sm text-gray-700 leading-relaxed">
+                        Primer contacto telefónico. Cliente se mostró receptivo. Disponibilidad para reunión presencial la próxima semana. Coordinar horario.
+                    </p>
+                    </div>
+                        
+                <!-- Gestión 3 -->
+                <div class="border-l-4 border-green-500 pl-4 pb-4 last:pb-0">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                            <span class="text-sm font-semibold text-gray-900">María Sánchez</span>
+                    </div>
+                        <span class="text-xs text-gray-500">28/12/2023 - 09:45</span>
+                    </div>
+                    <p class="text-sm text-gray-700 leading-relaxed">
+                        Revisión de documentos. Cliente presenta comprobantes de ingresos. Evaluando capacidad de pago para proponer plan personalizado.
+                    </p>
+                </div>
+
+                <!-- Gestión 4 -->
+                <div class="border-l-4 border-orange-500 pl-4 pb-4 last:pb-0">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                            <span class="text-sm font-semibold text-gray-900">María Sánchez</span>
+                    </div>
+                        <span class="text-xs text-gray-500">20/12/2023 - 16:20</span>
+                </div>
+                    <p class="text-sm text-gray-700 leading-relaxed">
+                        Notificación inicial enviada. Caso asignado para seguimiento. Cliente no ha respondido aún. Programar primer contacto.
+                    </p>
+            </div>
+        </div>
+    </div>
+    </main>
+
+    <script>
+        // Datos de clientes dummy distribuidos en distintas carteras
+        const clientesDummy = {
+            favacard: [
+                {
+                    id: 1,
+                    nombre: 'Carlos Mendoza',
+                    dni: '12.345.678',
+                    numeroId: 'FAV-001',
+                    telefono: '+54 11 4567-8901',
+                    email: 'carlos.mendoza@email.com',
+                    direccion: 'Av. Corrientes 1234, CABA',
+                    fechaNacimiento: '15/03/1985',
+                    montoAdeudado: 125000,
+                    fechaVencimiento: '15/12/2023',
+                    ultimaGestion: '05/01/2024',
+                    cuotasPendientes: 12,
+                    cuotasPagadas: 8,
+                    entidadFinanciera: 'Banco Nacional S.A.',
+                    observaciones: 'Cliente con historial de pagos irregular. Última cuota pagada hace 6 meses. Presenta disposición a negociar.',
+                    estado: 'contactado',
+                    diasMora: 45,
+                    clienteId: '#12345'
+                },
+                {
+                    id: 2,
+                    nombre: 'María Rodríguez',
+                    dni: '23.456.789',
+                    numeroId: 'FAV-002',
+                    telefono: '+54 11 5234-5678',
+                    email: 'maria.rodriguez@email.com',
+                    direccion: 'Libertador 5678, CABA',
+                    fechaNacimiento: '22/07/1990',
+                    montoAdeudado: 85000,
+                    fechaVencimiento: '10/11/2023',
+                    ultimaGestion: '02/01/2024',
+                    cuotasPendientes: 8,
+                    cuotasPagadas: 10,
+                    entidadFinanciera: 'Banco Nacional S.A.',
+                    observaciones: 'Cliente comunicativa. Ha realizado pagos parciales. Negociación en curso.',
+                    estado: 'con-arreglo',
+                    diasMora: 60,
+                    clienteId: '#12346'
+                },
+                {
+                    id: 3,
+                    nombre: 'Luis Fernández',
+                    dni: '34.567.890',
+                    numeroId: 'FAV-003',
+                    telefono: '+54 11 4789-1234',
+                    email: 'luis.fernandez@email.com',
+                    direccion: 'Rivadavia 9876, CABA',
+                    fechaNacimiento: '08/12/1988',
+                    montoAdeudado: 95000,
+                    fechaVencimiento: '20/12/2023',
+                    ultimaGestion: '28/12/2023',
+                    cuotasPendientes: 15,
+                    cuotasPagadas: 3,
+                    entidadFinanciera: 'Banco Nacional S.A.',
+                    observaciones: 'Primer contacto pendiente. Cliente no responde llamadas.',
+                    estado: 'sin-gestion',
+                    diasMora: 50,
+                    clienteId: '#12347'
+                },
+                {
+                    id: 4,
+                    nombre: 'Ana Martínez',
+                    dni: '45.678.901',
+                    numeroId: 'FAV-004',
+                    telefono: '+54 11 5123-4567',
+                    email: 'ana.martinez@email.com',
+                    direccion: 'Córdoba 2345, CABA',
+                    fechaNacimiento: '03/05/1992',
+                    montoAdeudado: 67000,
+                    fechaVencimiento: '05/11/2023',
+                    ultimaGestion: '01/01/2024',
+                    cuotasPendientes: 6,
+                    cuotasPagadas: 12,
+                    entidadFinanciera: 'Banco Nacional S.A.',
+                    observaciones: 'Deuda antigua. Cliente con problemas económicos. Evaluar situación.',
+                    estado: 'contactado',
+                    diasMora: 70,
+                    clienteId: '#12348'
+                }
+            ],
+            naldo: [
+                {
+                    id: 5,
+                    nombre: 'Roberto Silva',
+                    dni: '56.789.012',
+                    numeroId: 'NAL-001',
+                    telefono: '+54 11 4567-8901',
+                    email: 'roberto.silva@email.com',
+                    direccion: 'Santa Fe 3456, CABA',
+                    fechaNacimiento: '19/09/1985',
+                    montoAdeudado: 145000,
+                    fechaVencimiento: '18/12/2023',
+                    ultimaGestion: '04/01/2024',
+                    cuotasPendientes: 14,
+                    cuotasPagadas: 6,
+                    entidadFinanciera: 'Naldo Finanzas',
+                    observaciones: 'Cliente con trabajo estable. Muestra interés en regularizar situación.',
+                    estado: 'contactado',
+                    diasMora: 55,
+                    clienteId: '#12349'
+                },
+                {
+                    id: 6,
+                    nombre: 'Patricia López',
+                    dni: '67.890.123',
+                    numeroId: 'NAL-002',
+                    telefono: '+54 11 5234-5678',
+                    email: 'patricia.lopez@email.com',
+                    direccion: 'Florida 4567, CABA',
+                    fechaNacimiento: '11/04/1987',
+                    montoAdeudado: 98000,
+                    fechaVencimiento: '22/11/2023',
+                    ultimaGestion: '03/01/2024',
+                    cuotasPendientes: 10,
+                    cuotasPagadas: 8,
+                    entidadFinanciera: 'Naldo Finanzas',
+                    observaciones: 'Cliente ha cumplido con promesas anteriores. Plan de pago activo.',
+                    estado: 'con-arreglo',
+                    diasMora: 65,
+                    clienteId: '#12350'
+                },
+                {
+                    id: 7,
+                    nombre: 'Jorge García',
+                    dni: '78.901.234',
+                    numeroId: 'NAL-003',
+                    telefono: '+54 11 4789-1234',
+                    email: 'jorge.garcia@email.com',
+                    direccion: 'Lavalle 7890, CABA',
+                    fechaNacimiento: '27/11/1983',
+                    montoAdeudado: 180000,
+                    fechaVencimiento: '30/12/2023',
+                    ultimaGestion: '15/12/2023',
+                    cuotasPendientes: 18,
+                    cuotasPagadas: 2,
+                    entidadFinanciera: 'Naldo Finanzas',
+                    observaciones: 'Cliente elusivo. No responde comunicación. Considerar incobrable.',
+                    estado: 'incobrable',
+                    diasMora: 40,
+                    clienteId: '#12351'
+                },
+                {
+                    id: 8,
+                    nombre: 'Sofía Herrera',
+                    dni: '89.012.345',
+                    numeroId: 'NAL-004',
+                    telefono: '+54 11 5123-4567',
+                    email: 'sofia.herrera@email.com',
+                    direccion: 'Alvear 1234, CABA',
+                    fechaNacimiento: '14/06/1991',
+                    montoAdeudado: 72000,
+                    fechaVencimiento: '12/11/2023',
+                    ultimaGestion: '29/12/2023',
+                    cuotasPendientes: 5,
+                    cuotasPagadas: 13,
+                    entidadFinanciera: 'Naldo Finanzas',
+                    observaciones: 'Cliente regulariza deuda. Últimos pagos al día. Seguimiento continuo.',
+                    estado: 'con-arreglo',
+                    diasMora: 75,
+                    clienteId: '#12352'
+                }
+            ],
+            naranjax: [
+                {
+                    id: 9,
+                    nombre: 'Diego Torres',
+                    dni: '90.123.456',
+                    numeroId: 'NAR-001',
+                    telefono: '+54 11 4456-7890',
+                    email: 'diego.torres@email.com',
+                    direccion: 'Cabildo 5678, CABA',
+                    fechaNacimiento: '09/02/1986',
+                    montoAdeudado: 110000,
+                    fechaVencimiento: '25/12/2023',
+                    ultimaGestion: '06/01/2024',
+                    cuotasPendientes: 11,
+                    cuotasPagadas: 7,
+                    entidadFinanciera: 'NaranjaX S.A.',
+                    observaciones: 'Cliente negocia activamente. Propuestas de pago en evaluación.',
+                    estado: 'contactado',
+                    diasMora: 48,
+                    clienteId: '#12353'
+                },
+                {
+                    id: 10,
+                    nombre: 'Laura Díaz',
+                    dni: '01.234.567',
+                    numeroId: 'NAR-002',
+                    telefono: '+54 11 5345-6789',
+                    email: 'laura.diaz@email.com',
+                    direccion: 'San Martín 9012, CABA',
+                    fechaNacimiento: '31/08/1989',
+                    montoAdeudado: 83000,
+                    fechaVencimiento: '08/11/2023',
+                    ultimaGestion: '30/12/2023',
+                    cuotasPendientes: 7,
+                    cuotasPagadas: 11,
+                    entidadFinanciera: 'NaranjaX S.A.',
+                    observaciones: 'Casos cerrados. Cliente de baja del sistema.',
+                    estado: 'de-baja',
+                    diasMora: 80,
+                    clienteId: '#12354'
+                }
+            ]
+        };
+
+        // Cliente actual
+        let clienteActual = null;
+        let carteraActual = 'favacard';
+        let indiceClienteActual = 0;
+        let clientesCarteraActual = [];
+
+        // Función para obtener lista de clientes de la cartera actual
+        function getClientesCartera() {
+            return clientesDummy[carteraActual] || [];
+        }
+
+        // Función para cambiar de cartera y cargar primer cliente
+        function changeCartera(cartera) {
+            carteraActual = cartera;
+            clientesCarteraActual = getClientesCartera();
+            if (clientesCarteraActual.length > 0) {
+                indiceClienteActual = 0;
+                loadCliente(clientesCarteraActual[0], 0);
+                updateCarteraSelector(cartera);
+                limpiarBusqueda();
+            }
+        }
+
+        // Función para navegar entre clientes
+        function navegarCliente(direccion) {
+            clientesCarteraActual = getClientesCartera();
+            if (clientesCarteraActual.length === 0) return;
+
+            if (direccion === 'prev') {
+                indiceClienteActual = indiceClienteActual > 0 ? indiceClienteActual - 1 : clientesCarteraActual.length - 1;
+            } else {
+                indiceClienteActual = indiceClienteActual < clientesCarteraActual.length - 1 ? indiceClienteActual + 1 : 0;
+            }
+
+            loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
+        }
+
+        // Función para ir a un número de cliente específico
+        function irACliente() {
+            const input = document.getElementById('go-to-number');
+            const numeroCliente = parseInt(input.value);
+            
+            if (!numeroCliente || numeroCliente < 1) {
+                alert('Por favor ingresa un número válido');
+                input.focus();
+                return;
+            }
+
+            clientesCarteraActual = getClientesCartera();
+            const totalClientes = clientesCarteraActual.length;
+
+            if (numeroCliente > totalClientes) {
+                alert(`No existe el cliente #${numeroCliente}. Total de clientes en esta cartera: ${totalClientes}`);
+                input.value = '';
+                input.focus();
+                return;
+            }
+
+            // Limpiar búsqueda si existe
+            document.getElementById('search-input').value = '';
+            document.getElementById('btn-clear-search').style.display = 'none';
+
+            // Los números de cliente van de 1 a N, pero el índice es 0 a N-1
+            indiceClienteActual = numeroCliente - 1;
+            loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
+            
+            // Limpiar el input
+            input.value = '';
+            input.blur();
+        }
+
+        // Función para buscar cliente
+        function buscarCliente(busqueda) {
+            if (!busqueda || busqueda.trim() === '') {
+                limpiarBusqueda();
+                return;
+            }
+
+            const termino = busqueda.trim().toLowerCase();
+            clientesCarteraActual = getClientesCartera();
+            
+            // Buscar en toda la cartera
+            const clienteEncontrado = clientesCarteraActual.find(cliente => {
+                const nombreMatch = cliente.nombre.toLowerCase().includes(termino);
+                const dniMatch = cliente.dni.replace(/\./g, '').toLowerCase().includes(termino.replace(/\./g, ''));
+                const numeroIdMatch = cliente.numeroId.toLowerCase().includes(termino);
+                
+                return nombreMatch || dniMatch || numeroIdMatch;
+            });
+
+            if (clienteEncontrado) {
+                indiceClienteActual = clientesCarteraActual.indexOf(clienteEncontrado);
+                loadCliente(clienteEncontrado, indiceClienteActual);
+                // Mostrar botón de limpiar
+                document.getElementById('btn-clear-search').style.display = 'block';
+            } else {
+                // No se encontró, pero mantener el input activo para seguir buscando
+                console.log('No se encontró cliente con:', termino);
+            }
+        }
+
+        // Función para limpiar búsqueda
+        function limpiarBusqueda() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('btn-clear-search').style.display = 'none';
+            document.getElementById('go-to-number').value = '';
+            clientesCarteraActual = getClientesCartera();
+            if (clientesCarteraActual.length > 0) {
+                indiceClienteActual = 0;
+                loadCliente(clientesCarteraActual[0], 0);
+            }
+        }
+
+        // Función para cargar datos de un cliente
+        function loadCliente(cliente, indice) {
+            clienteActual = cliente;
+            indiceClienteActual = indice;
+            clientesCarteraActual = getClientesCartera();
+            
+            // Actualizar encabezado
+            document.getElementById('client-name-header').textContent = cliente.nombre;
+            document.getElementById('client-id-header').textContent = cliente.clienteId;
+            document.getElementById('client-dni-header').textContent = cliente.dni;
+            document.getElementById('client-numero-id-header').textContent = cliente.numeroId;
+            
+            // Actualizar datos del cliente
+            document.getElementById('client-name').textContent = cliente.nombre;
+            document.getElementById('client-dni').textContent = cliente.dni;
+            document.getElementById('client-numero-id').textContent = cliente.numeroId;
+            document.getElementById('client-phone').innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono}`;
+            document.getElementById('client-email').innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email}`;
+            document.getElementById('client-address').innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion}`;
+            document.getElementById('client-birthdate').textContent = cliente.fechaNacimiento;
+            
+            // Actualizar cartera
+            const carteraNames = {
+                'favacard': 'Favacard',
+                'naldo': 'Naldo',
+                'naranjax': 'NaranjaX'
+            };
+            document.getElementById('client-cartera').innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${carteraNames[cliente.cartera || carteraActual]}`;
+            
+            // Actualizar datos de la deuda
+            document.getElementById('debt-total-amount').textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
+            document.getElementById('debt-due-date').textContent = cliente.fechaVencimiento;
+            document.getElementById('debt-last-management').textContent = cliente.ultimaGestion;
+            document.getElementById('debt-installments').innerHTML = `<span class="text-red-600">${cliente.cuotasPendientes}</span> / <span class="text-green-600">${cliente.cuotasPagadas}</span>`;
+            document.getElementById('debt-entity').textContent = cliente.entidadFinanciera;
+            document.getElementById('debt-notes').textContent = cliente.observaciones;
+            
+            // Actualizar resumen
+            document.getElementById('summary-amount').textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
+            document.getElementById('summary-days-overdue').textContent = `${cliente.diasMora} días`;
+            
+            // Actualizar estado
+            const statusMap = {
+                'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
+                'contactado': { text: 'Contactado', class: 'status-contactado' },
+                'con-arreglo': { text: 'Con Arreglo', class: 'status-con-arreglo' },
+                'incobrable': { text: 'Incobrable', class: 'status-incobrable' },
+                'de-baja': { text: 'De Baja', class: 'status-de-baja' }
+            };
+            
+            const statusInfo = statusMap[cliente.estado];
+            document.getElementById('status-selector').value = cliente.estado;
+            updateStatusBadge(cliente.estado);
+            
+            // Actualizar contador de clientes
+            const total = clientesCarteraActual.length;
+            const actual = indice + 1;
+            document.getElementById('cliente-counter').textContent = `Cliente ${actual} de ${total}`;
+            
+            // Actualizar estado de botones de navegación
+            const btnPrev = document.getElementById('btn-prev-cliente');
+            const btnNext = document.getElementById('btn-next-cliente');
+            btnPrev.disabled = total <= 1;
+            btnNext.disabled = total <= 1;
+            
+            // Recargar iconos
+            setTimeout(() => lucide.createIcons(), 100);
+        }
+
+        // Función para actualizar el selector de cartera
+        function updateCarteraSelector(cartera) {
+            const carteraNames = {
+                'favacard': '📁 Favacard',
+                'naldo': '📁 Naldo',
+                'naranjax': '📁 NaranjaX'
+            };
+            document.getElementById('cartera-selected-text').textContent = carteraNames[cartera];
+        }
+
+        // Función para abrir/cerrar el dropdown de carteras
+        function toggleCarteraDropdown() {
+            const menu = document.getElementById('cartera-dropdown-menu');
+            const chevron = document.getElementById('cartera-chevron');
+            const isHidden = menu.classList.contains('hidden');
+            
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                chevron.style.transform = 'rotate(180deg)';
+            } else {
+                menu.classList.add('hidden');
+                chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // Función para seleccionar una cartera desde el dropdown
+        function selectCartera(cartera, displayText) {
+            changeCartera(cartera);
+            toggleCarteraDropdown(); // Cerrar el dropdown
+        }
+
+        // Función para actualizar el badge de estado visualmente
+        function updateStatusBadge(status) {
+            const statusMap = {
+                'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
+                'contactado': { text: 'Contactado', class: 'status-contactado' },
+                'con-arreglo': { text: 'Con Arreglo', class: 'status-con-arreglo' },
+                'incobrable': { text: 'Incobrable', class: 'status-incobrable' },
+                'de-baja': { text: 'De Baja', class: 'status-de-baja' }
+            };
+            
+            const display = document.getElementById('current-status-display');
+            const summaryStatus = document.getElementById('summary-status');
+            const statusInfo = statusMap[status];
+            
+            if (display) {
+                display.innerHTML = `<span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>`;
+            }
+            
+            if (summaryStatus) {
+                summaryStatus.innerHTML = `<span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>`;
+            }
+        }
+
+        // Función para guardar todo (estado + gestión si hay)
+        function saveAll() {
+            // Esta función puede llamar a múltiples endpoints HTMX o hacer un guardado general
+            alert('Funcionalidad de guardado general - se implementará con backend');
+        }
+
+        // Manejar el envío del formulario de gestión
+        document.getElementById('management-form').addEventListener('htmx:afterRequest', function(event) {
+            if (event.detail.successful) {
+                // Limpiar el textarea después de guardar
+                document.getElementById('management-note').value = '';
+                // Recargar iconos después de actualizar el DOM
+                setTimeout(() => lucide.createIcons(), 100);
+            }
+        });
+
+        // Inicializar cuando carga la página
+        document.addEventListener('DOMContentLoaded', function() {
+            // Asignar cartera a cada cliente
+            Object.keys(clientesDummy).forEach(cartera => {
+                clientesDummy[cartera].forEach(cliente => {
+                    cliente.cartera = cartera;
+                });
+            });
+            
+            // Inicializar cartera actual
+            clientesCarteraActual = getClientesCartera();
+            
+            // Cargar primer cliente de Favacard por defecto
+            if (clientesCarteraActual.length > 0) {
+                indiceClienteActual = 0;
+                loadCliente(clientesCarteraActual[0], 0);
+            }
+            
+            // Inicializar iconos
+            lucide.createIcons();
+            
+            // Cerrar dropdown de carteras al hacer clic fuera
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('cartera-dropdown-menu');
+                const button = document.getElementById('cartera-dropdown-btn');
+                const chevron = document.getElementById('cartera-chevron');
+                
+                if (dropdown && !dropdown.contains(event.target) && !button.contains(event.target)) {
+                    dropdown.classList.add('hidden');
+                    if (chevron) {
+                        chevron.style.transform = 'rotate(0deg)';
+                    }
+                }
+            });
+            
+            // Navegación con teclado (flechas izquierda/derecha)
+            document.addEventListener('keydown', function(event) {
+                // No navegar si el usuario está escribiendo en un input o textarea
+                const activeElement = document.activeElement;
+                const isInputFocused = activeElement.tagName === 'INPUT' || 
+                                      activeElement.tagName === 'TEXTAREA' || 
+                                      activeElement.isContentEditable;
+                
+                // Si no hay un input enfocado, permitir navegación con flechas
+                if (!isInputFocused) {
+                    if (event.key === 'ArrowLeft') {
+                        event.preventDefault();
+                        navegarCliente('prev');
+                    } else if (event.key === 'ArrowRight') {
+                        event.preventDefault();
+                        navegarCliente('next');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
