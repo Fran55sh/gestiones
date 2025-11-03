@@ -11,24 +11,105 @@
             box-sizing: border-box;
         }
 
+        :root {
+            /* Dark mode colors (default) */
+            --bg-primary: #141414;
+            --bg-secondary: #1a1a1a;
+            --bg-card: rgba(26, 26, 26, 0.8);
+            --bg-nav: rgba(20, 20, 20, 0.95);
+            --text-primary: #e8e8e8;
+            --text-secondary: #ffffff;
+            --text-muted: #888;
+            --accent-color: #7630b7;
+            --accent-dark: #5a1f8a;
+            --border-color: rgba(118, 48, 183, 0.2);
+            --shadow-color: rgba(0, 0, 0, 0.5);
+        }
+
+        [data-theme="light"] {
+            /* Light mode colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --bg-nav: rgba(255, 255, 255, 0.95);
+            --text-primary: #333333;
+            --text-secondary: #141414;
+            --text-muted: #666;
+            --accent-color: #7630b7;
+            --accent-dark: #5a1f8a;
+            --border-color: rgba(118, 48, 183, 0.3);
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            color: #333;
+            color: var(--text-primary);
             line-height: 1.6;
+            background: var(--bg-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         /* Header */
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(118, 48, 183, 0.3) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(118, 48, 183, 0.4) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 100%, rgba(118, 48, 183, 0.25) 0%, transparent 50%),
+                linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
+            background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+            position: relative;
+            color: var(--text-secondary);
             padding: 100px 20px;
             text-align: center;
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        [data-theme="light"] header {
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(118, 48, 183, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(118, 48, 183, 0.2) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 100%, rgba(118, 48, 183, 0.12) 0%, transparent 50%),
+                linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(2px 2px at 20% 30%, var(--text-secondary), transparent),
+                radial-gradient(2px 2px at 60% 70%, var(--text-secondary), transparent),
+                radial-gradient(1px 1px at 50% 50%, var(--text-secondary), transparent),
+                radial-gradient(1px 1px at 80% 10%, var(--text-secondary), transparent),
+                radial-gradient(2px 2px at 90% 40%, var(--text-secondary), transparent),
+                radial-gradient(1px 1px at 33% 60%, var(--text-secondary), transparent),
+                radial-gradient(2px 2px at 10% 80%, var(--text-secondary), transparent);
+            background-size: 200% 200%, 200% 200%, 200% 200%, 200% 200%, 200% 200%, 200% 200%, 200% 200%;
+            background-position: 0% 0%, 100% 0%, 0% 100%, 100% 100%, 50% 50%, 25% 75%, 75% 25%;
+            opacity: 0.6;
+            animation: twinkle 20s infinite;
+        }
+
+        [data-theme="light"] header::before {
+            opacity: 0.3;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 0.8; }
         }
 
         header h1 {
             font-size: 3rem;
             margin-bottom: 20px;
             animation: fadeInUp 0.8s ease-out;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
         }
 
         header p {
@@ -36,6 +117,13 @@
             margin-bottom: 30px;
             opacity: 0.95;
             animation: fadeInUp 1s ease-out;
+            position: relative;
+            z-index: 1;
+        }
+
+        header .btn-primary {
+            position: relative;
+            z-index: 1;
         }
 
         @keyframes fadeInUp {
@@ -51,11 +139,14 @@
 
         /* Navigation */
         nav {
-            background: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background: var(--bg-nav);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px var(--shadow-color);
             position: sticky;
             top: 0;
             z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
         }
 
         .nav-container {
@@ -68,9 +159,10 @@
         }
 
         .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #667eea;
+            width: auto;
+            max-width: 300px;
+            object-fit: contain;
+            transition: opacity 0.3s ease;
         }
 
         .nav-links {
@@ -81,28 +173,86 @@
 
         .nav-links a {
             text-decoration: none;
-            color: #333;
+            color: var(--text-primary);
             font-weight: 500;
-            transition: color 0.3s;
+            transition: color 0.3s, text-shadow 0.3s;
         }
 
         .nav-links a:hover {
-            color: #667eea;
+            color: var(--accent-color);
+            text-shadow: 0 0 8px rgba(118, 48, 183, 0.6);
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 50%, var(--accent-color) 100%);
             color: white;
             padding: 12px 30px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: 600;
             transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px rgba(118, 48, 183, 0.4);
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 30px rgba(118, 48, 183, 0.6);
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-right: 20px;
+        }
+
+        .theme-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            cursor: pointer;
+        }
+
+        .theme-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .theme-slider {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            border-radius: 26px;
+            transition: 0.3s;
+        }
+
+        .theme-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        input:checked + .theme-slider {
+            background-color: var(--accent-color);
+        }
+
+        input:checked + .theme-slider:before {
+            transform: translateX(24px);
+        }
+
+        .theme-icon {
+            font-size: 1.2rem;
         }
 
         /* Sections */
@@ -117,14 +267,16 @@
 
         /* Services */
         #services {
-            background: #f8f9fa;
+            background: var(--bg-primary);
+            transition: background-color 0.3s ease;
         }
 
         .section-title {
             text-align: center;
             font-size: 2.5rem;
             margin-bottom: 60px;
-            color: #333;
+            color: var(--text-secondary);
+            text-shadow: 0 0 10px rgba(118, 48, 183, 0.3);
         }
 
         .services-grid {
@@ -134,32 +286,38 @@
         }
 
         .service-card {
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
             padding: 40px;
             border-radius: 12px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 5px 20px var(--shadow-color);
+            transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s, background-color 0.3s;
+            color: var(--text-primary);
         }
 
         .service-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px rgba(118, 48, 183, 0.4);
+            border-color: rgba(118, 48, 183, 0.5);
         }
 
         .service-icon {
             font-size: 3rem;
             margin-bottom: 20px;
+            filter: drop-shadow(0 0 5px rgba(118, 48, 183, 0.5));
         }
 
         .service-card h3 {
             font-size: 1.5rem;
             margin-bottom: 15px;
-            color: #667eea;
+            color: var(--accent-color);
+            text-shadow: 0 0 8px rgba(118, 48, 183, 0.4);
         }
 
         /* About */
         #about {
-            background: white;
+            background: var(--bg-primary);
+            transition: background-color 0.3s ease;
         }
 
         .about-content {
@@ -171,13 +329,14 @@
 
         .about-text {
             font-size: 1.1rem;
-            color: #666;
+            color: var(--text-primary);
         }
 
         .about-text h2 {
             font-size: 2rem;
             margin-bottom: 20px;
-            color: #333;
+            color: var(--text-secondary);
+            text-shadow: 0 0 10px rgba(118, 48, 183, 0.3);
         }
 
         .stats-grid {
@@ -190,21 +349,35 @@
         .stat {
             text-align: center;
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 50%, var(--accent-color) 100%);
             color: white;
             border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(118, 48, 183, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .stat-number {
             font-size: 2.5rem;
             font-weight: bold;
             margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
 
         /* Contact Form */
         #contact {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: 
+                radial-gradient(ellipse at 30% 50%, rgba(118, 48, 183, 0.2) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 50%, rgba(118, 48, 183, 0.3) 0%, transparent 50%),
+                linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-secondary);
+            transition: background 0.3s ease;
+        }
+
+        [data-theme="light"] #contact {
+            background: 
+                radial-gradient(ellipse at 30% 50%, rgba(118, 48, 183, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 50%, rgba(118, 48, 183, 0.15) 0%, transparent 50%),
+                linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
         }
 
         .contact-content {
@@ -214,10 +387,18 @@
         }
 
         .contact-form {
-            background: white;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
             padding: 40px;
             border-radius: 12px;
-            color: #333;
+            color: var(--text-primary);
+            box-shadow: 0 10px 30px var(--shadow-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        .contact-form h2 {
+            color: var(--text-secondary);
+            text-shadow: 0 0 10px rgba(118, 48, 183, 0.4);
         }
 
         .form-group {
@@ -228,23 +409,31 @@
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
-            color: #555;
+            color: var(--text-primary);
         }
 
         .form-group input,
         .form-group textarea {
             width: 100%;
             padding: 12px;
-            border: 2px solid #e1e8ed;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border-color);
             border-radius: 8px;
             font-size: 15px;
-            transition: border-color 0.3s;
+            color: var(--text-primary);
+            transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
         }
 
         .form-group input:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(118, 48, 183, 0.3);
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--text-muted);
         }
 
         .form-group textarea {
@@ -255,19 +444,20 @@
         .btn-submit {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 50%, var(--accent-color) 100%);
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.3s;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px rgba(118, 48, 183, 0.4);
         }
 
         .btn-submit:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 30px rgba(118, 48, 183, 0.6);
         }
 
         .contact-info {
@@ -293,10 +483,12 @@
 
         /* Footer */
         footer {
-            background: #2d2d2d;
-            color: white;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-primary);
             padding: 40px 20px;
             text-align: center;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
         }
 
         /* Responsive */
@@ -311,6 +503,18 @@
 
             .nav-links {
                 display: none;
+            }
+
+            .logo {
+                max-width: 150px;
+            }
+
+            .theme-toggle {
+                margin-right: 10px;
+            }
+
+            .theme-icon {
+                font-size: 1rem;
             }
 
             .about-content,
@@ -331,10 +535,11 @@
 
         .benefits-list li {
             padding: 15px 0;
-            border-bottom: 1px solid #e1e8ed;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             gap: 15px;
+            color: var(--text-primary);
         }
 
         .benefits-list li:last-child {
@@ -342,8 +547,9 @@
         }
 
         .check-icon {
-            color: #667eea;
+            color: var(--accent-color);
             font-size: 1.5rem;
+            text-shadow: 0 0 8px rgba(118, 48, 183, 0.6);
         }
     </style>
 </head>
@@ -351,13 +557,23 @@
     <!-- Navigation -->
     <nav>
         <div class="nav-container">
-            <div class="logo">⚖️ Gestión de Cobranza</div>
+            <img src="logo-dark.png" alt="NOVA Gestión de Cobranzas" class="logo">
             <ul class="nav-links">
                 <li><a href="#services">Servicios</a></li>
                 <li><a href="#about">Nosotros</a></li>
                 <li><a href="#contact">Contacto</a></li>
             </ul>
-            <a href="login.html" class="btn-primary">Acceso Clientes</a>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="theme-toggle">
+                    <span class="theme-icon">🌙</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="theme-slider"></span>
+                    </label>
+                    <span class="theme-icon">☀️</span>
+                </div>
+                <a href="login.html" class="btn-primary">Acceso Clientes</a>
+            </div>
         </div>
     </nav>
 
@@ -553,6 +769,47 @@
             e.preventDefault();
             alert('¡Gracias por su solicitud! Nuestro equipo se pondrá en contacto con usted para preparar una propuesta personalizada.');
             this.reset();
+        });
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('theme-toggle');
+        const htmlElement = document.documentElement;
+        const logo = document.querySelector('.logo');
+
+        // Function to update logo based on theme
+        function updateLogo(theme) {
+            if (logo) {
+                if (theme === 'light') {
+                    logo.src = 'logo-light.png';
+                } else {
+                    logo.src = 'logo-dark.png';
+                }
+            }
+        }
+
+        // Load saved theme or default to dark
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        if (currentTheme === 'light') {
+            htmlElement.setAttribute('data-theme', 'light');
+            themeToggle.checked = true;
+            updateLogo('light');
+        } else {
+            htmlElement.setAttribute('data-theme', 'dark');
+            themeToggle.checked = false;
+            updateLogo('dark');
+        }
+
+        // Toggle theme on switch change
+        themeToggle.addEventListener('change', function() {
+            if (this.checked) {
+                htmlElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                updateLogo('light');
+            } else {
+                htmlElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                updateLogo('dark');
+            }
         });
     </script>
 </body>
