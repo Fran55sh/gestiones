@@ -1,0 +1,30 @@
+# Dockerfile para desarrollo
+FROM python:3.11-slim
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Establecer variables de entorno
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=app_refactored.py \
+    FLASK_ENV=development
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements.txt e instalar dependencias de Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar el resto de los archivos de la aplicación
+COPY . .
+
+# Exponer el puerto 5000
+EXPOSE 5000
+
+# Comando para desarrollo (Flask dev server con hot-reload)
+# Usando app_refactored.py para pruebas (puede cambiarse a app.py para volver al original)
+CMD ["python", "app_refactored.py"]
+

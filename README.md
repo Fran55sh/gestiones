@@ -39,14 +39,69 @@ Sistema completo de gestión de deudas con roles de usuario y dashboard administ
 - Información de sesión
 - Navegación simple
 
-## 📦 Instalación
+## 🐳 Dockerización
+
+La aplicación está completamente dockerizada y lista para ejecutarse en contenedores.
+
+### Requisitos
+- Docker Engine 20.10+
+- Docker Compose 2.0+ (opcional pero recomendado)
+
+### 🚀 Ejecución con Docker Compose (Recomendado)
+
+#### Para Producción:
+```bash
+# Construir y ejecutar en segundo plano
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Detener los contenedores
+docker-compose down
+```
+
+#### Para Desarrollo (con hot-reload):
+```bash
+# Construir y ejecutar con recarga automática
+docker-compose -f docker-compose.dev.yml up
+
+# Detener
+docker-compose -f docker-compose.dev.yml down
+```
+
+### 🔧 Ejecución con Docker directamente
+
+```bash
+# Construir la imagen
+docker build -t gestiones-mvp .
+
+# Ejecutar contenedor
+docker run -d -p 5000:5000 --name gestiones-mvp gestiones-mvp
+
+# Ver logs
+docker logs -f gestiones-mvp
+
+# Detener y eliminar contenedor
+docker stop gestiones-mvp && docker rm gestiones-mvp
+```
+
+### 📋 Archivos Docker incluidos
+
+- `Dockerfile` - Imagen de producción con Gunicorn
+- `Dockerfile.dev` - Imagen de desarrollo con hot-reload
+- `docker-compose.yml` - Configuración para producción
+- `docker-compose.dev.yml` - Configuración para desarrollo
+- `.dockerignore` - Archivos excluidos del build
+
+## 📦 Instalación Local (Sin Docker)
 
 1. Instala las dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-## 🎮 Uso
+## 🎮 Uso Local
 
 1. Inicia el servidor:
 ```bash
@@ -80,6 +135,10 @@ python app.py
 - `dashboard-user.html` - Panel básico para usuarios regulares
 - `app.py` - Backend Flask con autenticación y manejo de sesiones
 - `requirements.txt` - Dependencias de Python
+- `Dockerfile` - Configuración Docker para producción
+- `Dockerfile.dev` - Configuración Docker para desarrollo
+- `docker-compose.yml` - Orquestación Docker (producción)
+- `docker-compose.dev.yml` - Orquestación Docker (desarrollo)
 - `README.md` - Este archivo
 
 ## 🎨 Tecnologías Utilizadas
@@ -137,7 +196,7 @@ python app.py
 - [ ] Encriptación de contraseñas con bcrypt
 - [ ] Logging y auditoría
 - [ ] Tests unitarios
-- [ ] Docker containerization
+- [x] Docker containerization ✅
 - [ ] Configuración de producción
 
 ## 🛠️ Desarrollo
