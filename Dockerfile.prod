@@ -1,0 +1,61 @@
+# Dockerfile Optimizado para Producción en Oracle Cloud
+
+FROM python:3.11-slim
+
+# Metadatos
+LABEL maintainer="NOVA Gestión de Cobranzas"
+LABEL description="Sistema de Gestión de Deudas - Producción"
+
+# Variables de entorno
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=app_refactored.py \
+    FLASK_ENV=production \
+    PYTHONUNBUFFERED=1
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario no-root
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app /app/logs /app/data && \
+    chown -R appuser:appuser /app
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar e instalar dependencias de Python primero (para cache de Docker)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn
+
+# Copiar código de la aplicación
+COPY --chown=appuser:appuser . .
+
+# Cambiar a usuario no-root
+USER appuser
+
+# Exponer puerto
+EXPOSE 5000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/')" || exit 1
+
+# Comando para ejecutar con Gunicorn
+# Workers: (2 x CPU cores) + 1
+# Threads: 2 por worker
+# Timeout: 120 segundos
+CMD ["gunicorn", \
+     "--bind", "0.0.0.0:5000", \
+     "--workers", "2", \
+     "--threads", "2", \
+     "--timeout", "120", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "app_refactored:app"]
+
