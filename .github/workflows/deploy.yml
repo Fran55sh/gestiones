@@ -14,26 +14,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # --- Define variables condicionales ---
+     # --- Define variables condicionales ---
       - name: Set Environment Variables
         id: set_vars
         run: |
-          # Detecta si es la rama develop o main
+          # Detecta si es la rama develop
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "HOST_VAR=SSH_HOST_DEV" >> $GITHUB_ENV
             echo "COMPOSE_FILE=docker-compose.dev.yml" >> $GITHUB_ENV
-          else # Asume main/master para producción
+            echo "KEY_VAR=SSH_KEY_DEV" >> $GITHUB_ENV
+          else # Producción
             echo "HOST_VAR=SSH_HOST_PROD" >> $GITHUB_ENV
             echo "COMPOSE_FILE=docker-compose.prod.yml" >> $GITHUB_ENV
+            echo "KEY_VAR=SSH_KEY_PROD" >> $GITHUB_ENV 
           fi
 
+      
       # --- Despliegue SSH ---
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets[env.HOST_VAR] }} # Usa la variable HOST_VAR (PROD o DEV)
+          host: ${{ secrets[env.HOST_VAR] }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          key: ${{ secrets[env.KEY_VAR] }} 
           script: |
             # Navega al directorio del proyecto
             cd /home/ubuntu/gestiones
