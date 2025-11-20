@@ -1,28 +1,19 @@
-version: '3.8'
-
 services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: gestiones-mvp-prod
     ports:
       - "127.0.0.1:5000:5000"  # Solo accesible desde localhost (Nginx)
     env_file:
-      - .env
+      - .env.prod
     environment:
       - FLASK_ENV=production
-      - FLASK_APP=app_refactored.py
-      - MAIL_SERVER=${MAIL_SERVER:-smtp.zoho.com}
-      - MAIL_PORT=${MAIL_PORT:-465}
-      - MAIL_USE_TLS=${MAIL_USE_TLS:-False}
-      - MAIL_USE_SSL=${MAIL_USE_SSL:-True}
-      - MAIL_USERNAME=${MAIL_USERNAME:-}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
-      - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER:-}
+      - FLASK_APP=app/wsgi.py
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
       interval: 30s
       timeout: 10s
       retries: 3

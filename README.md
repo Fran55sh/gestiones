@@ -45,52 +45,51 @@ La aplicación está completamente dockerizada y lista para ejecutarse en conten
 
 ### Requisitos
 - Docker Engine 20.10+
-- Docker Compose 2.0+ (opcional pero recomendado)
+- Docker Compose 2.0+
 
-### 🚀 Ejecución con Docker Compose (Recomendado)
+### 🚀 Ejecución con Docker Compose
 
-#### Para Producción:
+#### Para Desarrollo Local (puerto 5001):
 ```bash
+# Configurar variables de entorno
+cp env/dev.env.example .env.dev
+# Editar .env.dev con tus valores
+
 # Construir y ejecutar en segundo plano
-docker-compose up -d
+docker compose -f docker-compose.dev.yml --project-name gestiones-dev --env-file .env.dev up --build -d
 
 # Ver logs
-docker-compose logs -f
-
-# Detener los contenedores
-docker-compose down
-```
-
-#### Para Desarrollo (con hot-reload):
-```bash
-# Construir y ejecutar con recarga automática
-docker-compose -f docker-compose.dev.yml up
+docker compose -f docker-compose.dev.yml --project-name gestiones-dev logs -f
 
 # Detener
-docker-compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.dev.yml --project-name gestiones-dev down
+
+# Acceder: http://localhost:5001
 ```
 
-### 🔧 Ejecución con Docker directamente
-
+#### Para Producción Local (puerto 5000):
 ```bash
-# Construir la imagen
-docker build -t gestiones-mvp .
+# Configurar variables de entorno
+cp env/prod.env.example .env.prod
+# Editar .env.prod con tus valores (SECRET_KEY, MAIL_*, etc.)
 
-# Ejecutar contenedor
-docker run -d -p 5000:5000 --name gestiones-mvp gestiones-mvp
+# Construir y ejecutar en segundo plano
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod --env-file .env.prod up --build -d
 
 # Ver logs
-docker logs -f gestiones-mvp
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod logs -f
 
-# Detener y eliminar contenedor
-docker stop gestiones-mvp && docker rm gestiones-mvp
+# Detener
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod down
+
+# Acceder: http://localhost:5000
 ```
 
 ### 📋 Archivos Docker incluidos
 
-- `Dockerfile` - Imagen de producción con Gunicorn
+- `Dockerfile.prod` - Imagen optimizada para producción con Gunicorn
 - `Dockerfile.dev` - Imagen de desarrollo con hot-reload
-- `docker-compose.yml` - Configuración para producción
+- `docker-compose.prod.yml` - Configuración para producción
 - `docker-compose.dev.yml` - Configuración para desarrollo
 - `.dockerignore` - Archivos excluidos del build
 
@@ -101,14 +100,26 @@ docker stop gestiones-mvp && docker rm gestiones-mvp
 pip install -r requirements.txt
 ```
 
-## 🎮 Uso Local
-
-1. Inicia el servidor:
+2. Configura variables de entorno:
 ```bash
-python app.py
+cp env/dev.env.example .env
+# Editar .env con tus valores
 ```
 
-2. Abre tu navegador en: `http://localhost:5000`
+3. Inicia el servidor:
+```bash
+# Opción 1: Usando Flask CLI
+export FLASK_APP=app/wsgi.py
+flask run
+
+# Opción 2: Usando Python directamente
+python -m app.wsgi
+
+# Opción 3: Usando Gunicorn (producción)
+gunicorn app.wsgi:app --bind 0.0.0.0:5000
+```
+
+4. Abre tu navegador en: `http://localhost:5000`
 
 ## 🔑 Credenciales de Prueba
 
@@ -129,24 +140,55 @@ python app.py
 
 ## 📁 Estructura de Archivos
 
-- `login.html` - Página de login con HTMX
-- `dashboard-admin.html` - Dashboard completo para administradores
-- `dashboard-gestor.html` 🆕 - Dashboard personalizado para gestores de deudas
-- `dashboard-user.html` - Panel básico para usuarios regulares
-- `app.py` - Backend Flask con autenticación y manejo de sesiones
-- `requirements.txt` - Dependencias de Python
-- `Dockerfile` - Configuración Docker para producción
-- `Dockerfile.dev` - Configuración Docker para desarrollo
-- `docker-compose.yml` - Orquestación Docker (producción)
-- `docker-compose.dev.yml` - Orquestación Docker (desarrollo)
-- `README.md` - Este archivo
+```
+Gestiones MVP/
+├── app/                          # Paquete principal de la aplicación
+│   ├── __init__.py              # Application factory
+│   ├── wsgi.py                  # Entry point para Gunicorn
+│   ├── routes/                  # Blueprints (rutas)
+│   │   ├── auth.py             # Login/logout
+│   │   ├── dashboards.py       # Dashboards por rol
+│   │   ├── contact.py          # Formulario de contacto
+│   │   ├── admin.py            # Endpoints administrativos
+│   │   └── root.py             # Páginas raíz
+│   ├── services/               # Lógica de negocio
+│   │   ├── email_service.py    # Envío de emails
+│   │   └── storage.py          # Almacenamiento de datos
+│   ├── utils/                  # Utilidades
+│   │   ├── security.py         # Decoradores y seguridad
+│   │   └── validators.py       # Validaciones
+│   └── templates/              # Plantillas HTML
+│       ├── index.html
+│       ├── login.html
+│       ├── dashboard-admin.html
+│       ├── dashboard-gestor.html
+│       └── dashboard-user.html
+├── static/                      # Archivos estáticos
+│   ├── css/                    # Hojas de estilo
+│   ├── js/                     # JavaScript (incluye htmx.min.js)
+│   └── ...
+├── data/                        # Datos en runtime (gitignored)
+├── env/                         # Plantillas de variables de entorno
+│   ├── dev.env.example
+│   └── prod.env.example
+├── docs/                        # Documentación
+├── Dockerfile.prod              # Docker para producción
+├── Dockerfile.dev              # Docker para desarrollo
+├── docker-compose.prod.yml     # Compose para producción
+├── docker-compose.dev.yml      # Compose para desarrollo
+├── requirements.txt            # Dependencias Python
+└── README.md                   # Este archivo
+```
 
 ## 🎨 Tecnologías Utilizadas
 
-- **HTMX** - Peticiones asíncronas sin JavaScript complejo
+- **Flask 3.0** - Backend Python con Application Factory pattern
+- **HTMX** - Peticiones asíncronas sin JavaScript complejo (servido localmente)
+- **Tailwind CSS** - Framework CSS utility-first (CDN en desarrollo)
+- **Lucide Icons** - Iconos modernos
 - **Chart.js** - Gráficos interactivos y visualizaciones
-- **Flask** - Backend Python con manejo de sesiones
-- **CSS Grid & Flexbox** - Layout responsive
+- **Gunicorn** - Servidor WSGI para producción
+- **Docker** - Containerización
 
 ## 📊 Funcionalidades del Dashboard
 
@@ -182,31 +224,125 @@ python app.py
 
 ## 🔒 Seguridad
 
-- Sesiones basadas en cookies
-- Autenticación por roles
-- Protección de rutas
-- Validación de credenciales
+- Sesiones basadas en cookies con lifetime configurable
+- Autenticación por roles con decoradores
+- Protección de rutas por rol
+- Contraseñas hasheadas con Werkzeug
+- Content Security Policy (CSP) configurada
+- Headers de seguridad (X-Frame-Options, X-Content-Type-Options, etc.)
+- CSRF opcional (Flask-SeaSurf, activable vía `ENABLE_CSRF=true`)
+- Validación y sanitización de entrada
+- ProxyFix para detrás de Nginx/Load Balancer
 
 ## 📝 Próximos Pasos (Para Producción)
 
-- [ ] Integración con base de datos (PostgreSQL/MySQL)
-- [ ] Autenticación JWT
-- [ ] Protección CSRF
-- [ ] Rate limiting
-- [ ] Encriptación de contraseñas con bcrypt
-- [ ] Logging y auditoría
-- [ ] Tests unitarios
 - [x] Docker containerization ✅
-- [ ] Configuración de producción
+- [x] Estructura modular con blueprints ✅
+- [x] Contraseñas hasheadas ✅
+- [x] Headers de seguridad ✅
+- [x] CSRF opcional ✅
+- [ ] Integración con base de datos (PostgreSQL/MySQL)
+- [ ] Rate limiting (Flask-Limiter)
+- [x] Tests unitarios básicos ✅
+- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Monitoreo y logging estructurado
+- [ ] Nginx reverse proxy con SSL
+- [ ] Implementar visualización de solicitudes de contacto en dashboard admin
 
 ## 🛠️ Desarrollo
 
-Para contribuir o modificar el sistema:
+### Estructura del Código
 
-1. Los datos están hardcodeados en `dashboard-admin.html`
-2. Reemplaza con llamadas a tu API en producción
-3. Personaliza los colores en las secciones `<style>`
-4. Añade más gráficos según necesidad
+La aplicación usa una arquitectura modular con **Application Factory**:
+
+- **`app/__init__.py`**: Crea la instancia de Flask y configura la aplicación
+- **`app/wsgi.py`**: Entry point para Gunicorn (`app.wsgi:app`)
+- **`app/routes/`**: Blueprints organizados por funcionalidad
+- **`app/services/`**: Lógica de negocio reutilizable
+- **`app/utils/`**: Utilidades y helpers
+
+### Agregar Nuevas Rutas
+
+1. Crea un nuevo blueprint en `app/routes/`:
+```python
+from flask import Blueprint
+bp = Blueprint('mi_feature', __name__)
+
+@bp.route('/mi-ruta')
+def mi_funcion():
+    return "Hola"
+```
+
+2. Regístralo en `app/__init__.py`:
+```python
+from .routes.mi_feature import bp as mi_feature_bp
+app.register_blueprint(mi_feature_bp)
+```
+
+### Variables de Entorno
+
+Copia las plantillas y configura:
+- `env/dev.env.example` → `.env.dev` (desarrollo)
+- `env/prod.env.example` → `.env.prod` (producción)
+
+Variables críticas:
+- `SECRET_KEY`: Genera con `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- `MAIL_*`: Credenciales de email
+- `CONTACT_RECIPIENTS`: Destinatarios separados por coma
+
+## 🧪 Testing
+
+### Ejecutar Tests
+
+```bash
+# Instalar dependencias de testing (ya incluidas en requirements.txt)
+pip install -r requirements.txt
+
+# Ejecutar todos los tests
+pytest
+
+# Ejecutar con cobertura
+pytest --cov=app --cov-report=html
+
+# Ejecutar tests específicos
+pytest tests/test_auth.py
+pytest tests/test_contact.py -v
+
+# Ejecutar con más detalle
+pytest -v --tb=short
+```
+
+### Estructura de Tests
+
+```
+tests/
+├── conftest.py           # Configuración y fixtures compartidos
+├── test_auth.py          # Tests de autenticación
+├── test_contact.py       # Tests de formulario de contacto
+├── test_admin.py         # Tests de endpoints administrativos
+├── test_validators.py    # Tests de validadores
+├── test_services.py      # Tests de servicios (email, storage)
+├── test_security.py      # Tests de seguridad y roles
+├── test_error_handling.py # Tests de manejo de errores
+└── test_health.py        # Tests de endpoints de salud
+```
+
+### Cobertura de Tests
+
+Los tests cubren:
+- ✅ Autenticación y autorización
+- ✅ Validación de entrada
+- ✅ Servicios (email, storage)
+- ✅ Manejo de errores
+- ✅ Endpoints administrativos
+- ✅ Formulario de contacto
+- ✅ Health checks
+
+Para ver el reporte de cobertura:
+```bash
+pytest --cov=app --cov-report=html
+# Abrir htmlcov/index.html en el navegador
+```
 
 ## 📧 Soporte
 

@@ -9,7 +9,7 @@ LABEL description="Sistema de Gestión de Deudas - Producción"
 # Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    FLASK_APP=app_refactored.py \
+    FLASK_APP=app/wsgi.py \
     FLASK_ENV=production \
     PYTHONUNBUFFERED=1
 
@@ -43,7 +43,7 @@ EXPOSE 5000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')" || exit 1
 
 # Comando para ejecutar con Gunicorn
 # Workers: (2 x CPU cores) + 1
@@ -54,8 +54,9 @@ CMD ["gunicorn", \
      "--workers", "2", \
      "--threads", "2", \
      "--timeout", "120", \
+     "--graceful-timeout", "30", \
      "--access-logfile", "-", \
      "--error-logfile", "-", \
      "--log-level", "info", \
-     "app_refactored:app"]
+     "app.wsgi:app"]
 

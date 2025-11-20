@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inicio de Sesión</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="/static/js/htmx.min.js"></script>
     <link rel="stylesheet" href="/static/css/login.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
         
         <div class="error-message" id="error-message"></div>
 
-        <form hx-post="/api/login" hx-target="#login-result" hx-indicator=".htmx-indicator">
+        <form hx-post="/api/login" hx-target="#login-result" hx-swap="innerHTML" hx-indicator=".htmx-indicator" hx-boost="false" method="post">
             <div class="form-group">
                 <label for="username">Usuario</label>
                 <input 

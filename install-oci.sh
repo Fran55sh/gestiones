@@ -20,11 +20,10 @@ if ! command -v docker &> /dev/null; then
     rm get-docker.sh
 fi
 
-# Instalar Docker Compose
-if ! command -v docker-compose &> /dev/null; then
-    echo "🐳 Instalando Docker Compose..."
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
+# Verificar Docker Compose (v2 incluido en Docker)
+if ! docker compose version &> /dev/null; then
+    echo "🐳 Docker Compose v2 debería estar incluido con Docker"
+    echo "Si no funciona, instala manualmente desde: https://docs.docker.com/compose/install/"
 fi
 
 # Instalar Nginx
@@ -61,7 +60,7 @@ echo "✅ Instalación completada"
 echo ""
 echo "⚠️  IMPORTANTE:"
 echo "1. Reinicia la sesión SSH para que los cambios de grupo Docker surtan efecto"
-echo "2. Configura el archivo .env con tus credenciales"
-echo "3. Configura Nginx con tu dominio"
+echo "2. Configura el archivo .env.prod desde env/prod.env.example con tus credenciales"
+echo "3. Configura Nginx con tu dominio (ver nginx.conf.example)"
 echo "4. Ejecuta ./deploy.sh para desplegar la aplicación"
 

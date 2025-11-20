@@ -12,20 +12,22 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 - Sin esto, las sesiones son vulnerables
 
 ### 2. Credenciales de Usuario
-**CAMBIAR OBLIGATORIAMENTE** en `app_refactored.py`:
-- `admin/admin123` → Contraseña segura
-- `gestor/gestor123` → Contraseña segura  
-- `usuario/user123` → Contraseña segura
+**CAMBIAR OBLIGATORIAMENTE** en `app/__init__.py` (diccionario `USERS`):
+- `admin/admin123` → Contraseña segura (ya hasheada con Werkzeug)
+- `gestor/gestor123` → Contraseña segura (ya hasheada con Werkzeug)
+- `usuario/user123` → Contraseña segura (ya hasheada con Werkzeug)
+
+**Nota:** Las contraseñas ya están hasheadas usando `generate_password_hash` de Werkzeug.
 
 **En producción idealmente:**
 - Usar base de datos con hash de contraseñas (bcrypt)
-- Implementar autenticación real
+- Implementar autenticación real con base de datos
 
 ### 3. Variables de Entorno (.env)
-- Copiar `env.example` a `.env`
-- Configurar TODAS las variables
-- **NUNCA commitear `.env` al repositorio**
-- Verificar que `.env` está en `.gitignore`
+- Copiar `env/prod.env.example` a `.env.prod`
+- Configurar TODAS las variables (SECRET_KEY, MAIL_*, CONTACT_RECIPIENTS, etc.)
+- **NUNCA commitear `.env.prod` o `.env.dev` al repositorio**
+- Verificar que están en `.gitignore`
 
 ### 4. Firewall en Oracle Cloud
 En Security List de OCI:
@@ -48,7 +50,7 @@ En Security List de OCI:
 - Probar envío antes de producción
 
 ### 7. Base de Datos
-- Actualmente usa archivos JSON (contact_submissions.json)
+- Actualmente usa archivos JSON (`data/contact_submissions.json`)
 - Para producción, considerar PostgreSQL/MySQL
 - Implementar backups automáticos
 
@@ -58,8 +60,8 @@ En Security List de OCI:
 - Considerar herramientas de monitoreo (opcional)
 
 ### 9. Backup
-- Backup automático de `contact_submissions.json`
-- Backup de configuración (.env)
+- Backup automático de `data/contact_submissions.json`
+- Backup de configuración (.env.prod)
 - Estrategia de recuperación
 
 ### 10. Performance
@@ -88,9 +90,9 @@ En Security List de OCI:
 # 1. Instalar dependencias (una vez)
 ./install-oci.sh
 
-# 2. Configurar .env
-cp env.example .env
-nano .env  # Editar y configurar
+# 2. Configurar .env.prod
+cp env/prod.env.example .env.prod
+nano .env.prod  # Editar y configurar
 
 # 3. Configurar Nginx
 sudo nano /etc/nginx/sites-available/gestiones
@@ -103,33 +105,34 @@ sudo certbot --nginx -d tu-dominio.com
 ./deploy.sh
 
 # 6. Ver logs
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod logs -f
 ```
 
 ## 🆘 Troubleshooting
 
 ### La aplicación no inicia
 ```bash
-docker-compose -f docker-compose.prod.yml logs
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod logs
 ```
 
 ### Verificar configuración
 ```bash
-docker-compose -f docker-compose.prod.yml ps
-curl http://localhost:5000  # Desde dentro del servidor
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod ps
+curl http://localhost:5000/healthz  # Healthcheck
 ```
 
 ### Reiniciar todo
 ```bash
-docker-compose -f docker-compose.prod.yml down
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod down
+docker compose -f docker-compose.prod.yml --project-name gestiones-prod --env-file .env.prod up -d --build
 ```
 
 ## 📚 Documentación Creada
 
 1. **GUIA_DESPLIEGUE_OCI.md** - Guía completa paso a paso
 2. **CHECKLIST_SEGURIDAD.md** - Checklist de seguridad detallado
-3. **env.example** - Plantilla de variables de entorno
+3. **env/prod.env.example** - Plantilla de variables de entorno para producción
+4. **env/dev.env.example** - Plantilla de variables de entorno para desarrollo
 4. **docker-compose.prod.yml** - Configuración de producción
 5. **nginx.conf.example** - Configuración de Nginx
 6. **deploy.sh** - Script de despliegue automatizado

@@ -7,7 +7,7 @@ WORKDIR /app
 # Establecer variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    FLASK_APP=app_refactored.py \
+    FLASK_APP=app/wsgi.py \
     FLASK_ENV=production
 
 # Instalar dependencias del sistema (si es necesario)
@@ -32,7 +32,5 @@ USER appuser
 EXPOSE 5000
 
 # Comando para ejecutar la aplicación
-# Usar Gunicorn para producción o Flask dev server para desarrollo
-# Usando app_refactored.py para pruebas (puede cambiarse a app:app para volver al original)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "120", "app_refactored:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "120", "--graceful-timeout", "30", "app.wsgi:app"]
 
