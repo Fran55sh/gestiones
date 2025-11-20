@@ -1,0 +1,47 @@
+# En tu archivo deploy.yml:
+
+name: CI/CD Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop # Asegúrate de que escuche la rama develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # --- Define variables condicionales ---
+      - name: Set Environment Variables
+        id: set_vars
+        run: |
+          # Detecta si es la rama develop o main
+          if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "HOST_VAR=SSH_HOST_DEV" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=docker-compose.dev.yml" >> $GITHUB_ENV
+          else # Asume main/master para producción
+            echo "HOST_VAR=SSH_HOST_PROD" >> $GITHUB_ENV
+            echo "COMPOSE_FILE=docker-compose.prod.yml" >> $GITHUB_ENV
+          fi
+
+      # --- Despliegue SSH ---
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets[env.HOST_VAR] }} # Usa la variable HOST_VAR (PROD o DEV)
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Navega al directorio del proyecto
+            cd /home/ubuntu/gestiones
+
+            # Obtiene el código de la rama actual (develop o main)
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+
+            # Reconstruye y levanta Docker usando el archivo de configuración correcto
+            # Usa el archivo definido en COMPOSE_FILE
+            sudo docker-compose -f ${{ env.COMPOSE_FILE }} up -d --build
