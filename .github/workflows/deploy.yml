@@ -46,5 +46,4 @@ jobs:
             git pull origin ${{ github.ref_name }}
 
             # Reconstruye y levanta Docker usando el archivo de configuración correcto
-            # Usa el archivo definido en COMPOSE_FILE
             sudo docker-compose -f ${{ env.COMPOSE_FILE }} up -d --build
