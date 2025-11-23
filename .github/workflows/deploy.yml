@@ -59,18 +59,33 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_KEY_DEV }}
 
-      - name: Add server to known hosts
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST_DEV }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # Mostrar que las claves están disponibles (sin mostrar la clave privada)
+          ssh-add -l || echo "⚠️ No se encontraron claves en el agente"
 
-      - name: Verify SSH connection
+      - name: Test SSH connection
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} "echo 'SSH connection successful'"
+          echo "🔍 Probando conexión SSH..."
+          echo "Usuario: ${{ secrets.SSH_USER }}"
+          echo "Host: ${{ secrets.SSH_HOST_DEV }}"
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} "echo 'SSH connection successful'" || {
+            echo "❌ Error de conexión SSH"
+            echo "Verifica:"
+            echo "1. Que la clave SSH privada en GitHub Secrets esté completa (incluye -----BEGIN y -----END)"
+            echo "2. Que la clave pública correspondiente esté en ~/.ssh/authorized_keys del servidor"
+            echo "3. Que el usuario SSH sea correcto"
+            echo "4. Que el puerto 22 esté abierto en OCI Security List"
+            exit 1
+          }
 
       - name: Deploy to staging server
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
             set -e
             echo "🚀 Iniciando despliegue a staging..."
             
@@ -104,7 +119,7 @@ jobs:
         run: |
           echo "🔍 Verificando healthcheck..."
           sleep 5
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
             # Verificar que el contenedor está corriendo
             if docker compose -f docker-compose.prod.yml --project-name gestiones-prod ps | grep -q "Up"; then
               echo "✅ Contenedor está corriendo"
@@ -125,7 +140,7 @@ jobs:
       - name: Show deployment logs
         if: always()
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_DEV }} << 'ENDSSH'
             echo "📋 Últimos logs del contenedor:"
             docker compose -f docker-compose.prod.yml --project-name gestiones-prod logs --tail=50
           ENDSSH
@@ -148,18 +163,33 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_KEY_PROD }}
 
-      - name: Add server to known hosts
+      - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST_PROD }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # Mostrar que las claves están disponibles (sin mostrar la clave privada)
+          ssh-add -l || echo "⚠️ No se encontraron claves en el agente"
 
-      - name: Verify SSH connection
+      - name: Test SSH connection
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} "echo 'SSH connection successful'"
+          echo "🔍 Probando conexión SSH..."
+          echo "Usuario: ${{ secrets.SSH_USER }}"
+          echo "Host: ${{ secrets.SSH_HOST_PROD }}"
+          ssh -v -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} "echo 'SSH connection successful'" || {
+            echo "❌ Error de conexión SSH"
+            echo "Verifica:"
+            echo "1. Que la clave SSH privada en GitHub Secrets esté completa (incluye -----BEGIN y -----END)"
+            echo "2. Que la clave pública correspondiente esté en ~/.ssh/authorized_keys del servidor"
+            echo "3. Que el usuario SSH sea correcto"
+            echo "4. Que el puerto 22 esté abierto en OCI Security List"
+            exit 1
+          }
 
       - name: Deploy to production server
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
             set -e
             echo "🚀 Iniciando despliegue a PRODUCCIÓN..."
             echo "⚠️  ATENCIÓN: Este es un despliegue a producción"
@@ -205,7 +235,7 @@ jobs:
         run: |
           echo "🔍 Verificando healthcheck en producción..."
           sleep 10
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
             # Verificar que el contenedor está corriendo
             if docker compose -f docker-compose.prod.yml --project-name gestiones-prod ps | grep -q "Up"; then
               echo "✅ Contenedor está corriendo"
@@ -227,7 +257,7 @@ jobs:
       - name: Show deployment logs
         if: always()
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
             echo "📋 Últimos logs del contenedor:"
             docker compose -f docker-compose.prod.yml --project-name gestiones-prod logs --tail=50
           ENDSSH
@@ -236,7 +266,7 @@ jobs:
         if: failure()
         run: |
           echo "⚠️  El despliegue falló. Considera hacer rollback manualmente"
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts -o BatchMode=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST_PROD }} << 'ENDSSH'
             echo "Ver estado actual:"
             docker compose -f docker-compose.prod.yml --project-name gestiones-prod ps
             echo ""
