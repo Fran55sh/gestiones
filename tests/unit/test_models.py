@@ -71,13 +71,16 @@ def test_case_creation(sample_case):
     assert sample_case.cartera == "Cartera A"
 
 
-def test_case_to_dict(sample_case):
+def test_case_to_dict(app, sample_case):
     """Test conversión de caso a diccionario."""
-    case_dict = sample_case.to_dict()
-    assert "id" in case_dict
-    assert "entity" in case_dict
-    assert "amount" in case_dict
-    assert isinstance(case_dict["amount"], float)
+    with app.app_context():
+        # Re-adjuntar el objeto a la sesión actual
+        case = db.session.merge(sample_case)
+        case_dict = case.to_dict()
+        assert "id" in case_dict
+        assert "entity" in case_dict
+        assert "amount" in case_dict
+        assert isinstance(case_dict["amount"], float)
 
 
 def test_promise_creation(app, sample_case):
@@ -116,16 +119,25 @@ def test_contact_submission_creation(app):
 
 def test_case_relationships(app, sample_case, sample_user):
     """Test relaciones de caso."""
-    # Crear promesa
-    promise = Promise(case_id=sample_case.id, amount=Decimal("1000"), promise_date=date.today())
-    db.session.add(promise)
+    with app.app_context():
+        # Re-adjuntar objetos a la sesión actual
+        case = db.session.merge(sample_case)
+        user = db.session.merge(sample_user)
+        
+        # Crear promesa
+        promise = Promise(case_id=case.id, amount=Decimal("1000"), promise_date=date.today())
+        db.session.add(promise)
 
-    # Crear actividad
-    activity = Activity(case_id=sample_case.id, type="call", created_by_id=sample_user.id)
-    db.session.add(activity)
-    db.session.commit()
+        # Crear actividad
+        activity = Activity(case_id=case.id, type="call", created_by_id=user.id)
+        db.session.add(activity)
+        db.session.commit()
+        
+        # Refrescar el caso para cargar las relaciones
+        db.session.refresh(case)
+        db.session.refresh(user)
 
-    # Verificar relaciones
-    assert sample_case.promises.count() == 1
-    assert sample_case.activities.count() == 1
-    assert sample_user.cases.count() == 1
+        # Verificar relaciones
+        assert case.promises.count() == 1
+        assert case.activities.count() == 1
+        assert user.cases.count() == 1
