@@ -51,7 +51,7 @@ class Case(db.Model):
         }
         
         if include_relations:
-            from .activity import Activity
+            from ..activities.models import Activity
             data['promises'] = [p.to_dict() for p in self.promises.all()]
             data['activities'] = [a.to_dict() for a in self.activities.order_by(Activity.created_at.desc()).limit(10).all()]
         
