@@ -13,8 +13,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 from werkzeug.exceptions import HTTPException
 
-from .db import db
-from .models import User, Case, Promise, Activity, ContactSubmission
+from .core.database import db
+from .features.users.models import User
+from .features.cases.models import Case
+from .features.cases.promise import Promise
+from .features.activities.models import Activity
+from .features.contact.models import ContactSubmission
 
 logger = logging.getLogger(__name__)
 
@@ -139,22 +143,25 @@ def create_app() -> Flask:
     except Exception as e:
         logger.warning(f"Rate limiting no disponible: {e}")
 
-    # Blueprints
-    from .routes.auth import bp as auth_bp
-    from .routes.dashboards import bp as dashboards_bp
-    from .routes.contact import bp as contact_bp
-    from .routes.admin import bp as admin_bp
-    from .routes.root import bp as root_bp
-    from .routes.api import bp as api_bp
-    from .routes.api_activities import bp as api_activities_bp
+    # Blueprints - Web routes (HTML)
+    from .web.auth import bp as auth_bp
+    from .web.dashboards import bp as dashboards_bp
+    from .web.contact import bp as contact_bp
+    from .web.admin import bp as admin_bp
+    from .web.public import bp as root_bp
+    
+    # Blueprints - API routes (REST)
+    from .api.v1 import bp as api_v1_bp
 
+    # Register web blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboards_bp)
     app.register_blueprint(contact_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(root_bp)
-    app.register_blueprint(api_bp)
-    app.register_blueprint(api_activities_bp)
+    
+    # Register API blueprints
+    app.register_blueprint(api_v1_bp)
 
     # Health
     @app.route("/healthz")

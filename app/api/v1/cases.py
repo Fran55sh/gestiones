@@ -6,18 +6,22 @@ from flask import Blueprint, request, jsonify, session
 from flask import current_app as app
 from sqlalchemy import or_
 
-from ..db import db
-from ..models import Case, Promise, Activity, User
-from ..services.dashboard_service import (
+from ...core.database import db
+from ...features.cases.models import Case
+from ...features.cases.promise import Promise
+from ...features.activities.models import Activity
+from ...features.users.models import User
+from ...services.dashboard import (
     get_kpis, get_performance_chart_data, get_cartera_distribution,
     get_gestores_ranking, get_cases_status_distribution, get_comparison_data
 )
-from ..utils.security import require_role
-from ..utils.exceptions import ValidationError, NotFoundError
-from ..utils.audit import audit_log
-from ..utils.cache import invalidate_cache
+from ...utils.security import require_role
+from ...utils.exceptions import ValidationError, NotFoundError
+from ...services.audit import audit_log
+from ...services.cache import invalidate_cache
 
-bp = Blueprint('api', __name__, url_prefix='/api')
+# Use the parent blueprint from __init__.py
+from . import bp
 
 
 def _parse_date(date_str: str) -> datetime:

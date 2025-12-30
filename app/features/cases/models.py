@@ -2,7 +2,7 @@
 Modelo de Caso/Deuda.
 """
 from datetime import datetime
-from ..db import db
+from ...core.database import db
 
 
 class Case(db.Model):

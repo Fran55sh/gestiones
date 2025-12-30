@@ -2,12 +2,14 @@
 Endpoints API para gestiones/actividades.
 """
 from flask import Blueprint, request, jsonify, session
-from ..db import db
-from ..models import Activity, Case
-from ..utils.audit import audit_log
+from ...core.database import db
+from ...features.activities.models import Activity
+from ...features.cases.models import Case
+from ...services.audit import audit_log
 import logging
 
-bp = Blueprint('api_activities', __name__, url_prefix='/api/activities')
+# Use the parent blueprint from __init__.py
+from . import bp
 logger = logging.getLogger(__name__)
 
 
