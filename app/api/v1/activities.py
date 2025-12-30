@@ -13,7 +13,7 @@ from . import bp
 logger = logging.getLogger(__name__)
 
 
-@bp.route('/<int:activity_id>', methods=['DELETE'])
+@bp.route('/activities/<int:activity_id>', methods=['DELETE'])
 def delete_activity(activity_id):
     """Elimina una actividad/gestión."""
     try:
@@ -62,7 +62,7 @@ def delete_activity(activity_id):
         }), 500
 
 
-@bp.route('/case/<int:case_id>', methods=['GET'])
+@bp.route('/activities/case/<int:case_id>', methods=['GET'])
 def get_case_activities(case_id):
     """Obtiene todas las actividades de un caso."""
     try:
