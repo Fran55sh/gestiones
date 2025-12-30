@@ -49,7 +49,6 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     environment:
       name: develop
-      url: http://${{ secrets.DEVELOP_HOST }}
     
     steps:
     - uses: actions/checkout@v4
