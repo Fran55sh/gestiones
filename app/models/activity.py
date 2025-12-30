@@ -2,7 +2,7 @@
 Modelo de Actividad/Gestión.
 """
 from datetime import datetime
-from ..db import db
+from ..core.database import db
 
 
 class Activity(db.Model):

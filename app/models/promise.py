@@ -2,7 +2,7 @@
 Modelo de Promesa de Pago.
 """
 from datetime import datetime
-from ..db import db
+from ..core.database import db
 
 
 class Promise(db.Model):

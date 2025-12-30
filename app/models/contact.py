@@ -2,7 +2,7 @@
 Modelo de Solicitud de Contacto.
 """
 from datetime import datetime
-from ..db import db
+from ..core.database import db
 
 
 class ContactSubmission(db.Model):
