@@ -30,11 +30,12 @@ def app():
     os.environ["MAIL_USE_TLS"] = "true"
     os.environ["MAIL_USE_SSL"] = "false"
     os.environ["TESTING"] = "true"  # Set testing mode before creating app
+    # Forzar SQLite en tests ANTES de crear la app (sobrescribe cualquier DATABASE_URL)
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
     app = create_app()
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False  # Deshabilitar CSRF en tests
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"  # Base de datos en memoria para tests
 
     with app.app_context():
         # Limpiar cualquier dato existente y recrear las tablas
