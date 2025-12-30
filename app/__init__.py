@@ -8,9 +8,13 @@ from datetime import timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, request
+from flask_compress import Compress
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 from werkzeug.exceptions import HTTPException
+
+from .db import db
+from .models import User, Case, Promise, Activity, ContactSubmission
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,30 @@ def create_app() -> Flask:
     app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", app.config["MAIL_USERNAME"])
     app.config["MAIL_TIMEOUT"] = 20
 
+    # Database config
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        # Default to SQLite in data directory
+        data_dir = project_root / "data"
+        data_dir.mkdir(exist_ok=True)
+        database_url = f"sqlite:///{data_dir / 'gestiones.db'}"
+    
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ECHO"] = _env_bool("SQLALCHEMY_ECHO", False)
+    
+    # Initialize database
+    db.init_app(app)
+    
+    # Compression
+    Compress(app)
+    
+    # Create tables if they don't exist
+    with app.app_context():
+        db.create_all()
+        # Migrate default users if they don't exist
+        _migrate_default_users(app)
+
     # Project paths in config
     app.config["ROOT_DIR"] = str(project_root)
     app.config["ALLOWED_STATIC_EXTENSIONS"] = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".css", ".js"}
@@ -81,26 +109,35 @@ def create_app() -> Flask:
         ],
     )
 
-    # Demo users (hashed)
-    _default_users = {
-        "admin": {"password": "admin123", "role": "admin"},
-        "gestor": {"password": "gestor123", "role": "gestor"},
-        "usuario": {"password": "user123", "role": "user"},
-    }
-    app.config["USERS"] = {
-        username: {"password_hash": generate_password_hash(v["password"]), "role": v["role"]}
-        for username, v in _default_users.items()
-    }
+    # Legacy support: mantener app.config["USERS"] para compatibilidad temporal
+    # Esto será removido una vez que auth.py esté completamente migrado
+    app.config["USERS"] = {}
 
-    # CSRF optional
-    if _env_bool("ENABLE_CSRF", False):
+    # CSRF - Habilitado por defecto en producción
+    enable_csrf = _env_bool("ENABLE_CSRF", not app.debug)
+    if enable_csrf:
         try:
             from flask_seasurf import SeaSurf
-
             SeaSurf(app)
             logger.info("CSRF habilitado con Flask-SeaSurf")
         except Exception as e:
             logger.warning(f"ENABLE_CSRF activo pero Flask-SeaSurf no disponible: {e}")
+    
+    # Rate Limiting
+    try:
+        from flask_limiter import Limiter
+        from flask_limiter.util import get_remote_address
+        
+        limiter = Limiter(
+            app=app,
+            key_func=get_remote_address,
+            default_limits=["200 per day", "50 per hour"],
+            storage_uri=os.environ.get("REDIS_URL", "memory://")
+        )
+        app.config["RATELIMIT_ENABLED"] = True
+        logger.info("Rate limiting habilitado")
+    except Exception as e:
+        logger.warning(f"Rate limiting no disponible: {e}")
 
     # Blueprints
     from .routes.auth import bp as auth_bp
@@ -108,12 +145,16 @@ def create_app() -> Flask:
     from .routes.contact import bp as contact_bp
     from .routes.admin import bp as admin_bp
     from .routes.root import bp as root_bp
+    from .routes.api import bp as api_bp
+    from .routes.api_activities import bp as api_activities_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboards_bp)
     app.register_blueprint(contact_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(root_bp)
+    app.register_blueprint(api_bp)
+    app.register_blueprint(api_activities_bp)
 
     # Health
     @app.route("/healthz")
@@ -159,5 +200,28 @@ def create_app() -> Flask:
         return handle_generic_exception(error)
 
     return app
+
+
+def _migrate_default_users(app):
+    """Migra usuarios por defecto a la base de datos si no existen."""
+    default_users = {
+        "admin": {"password": "admin123", "role": "admin"},
+        "gestor": {"password": "gestor123", "role": "gestor"},
+        "usuario": {"password": "user123", "role": "user"},
+    }
+    
+    for username, user_data in default_users.items():
+        existing_user = User.query.filter_by(username=username).first()
+        if not existing_user:
+            new_user = User(
+                username=username,
+                role=user_data["role"],
+                active=True
+            )
+            new_user.set_password(user_data["password"])
+            db.session.add(new_user)
+            logger.info(f"Usuario por defecto creado: {username} ({user_data['role']})")
+    
+    db.session.commit()
 
 

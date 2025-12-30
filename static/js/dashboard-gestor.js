@@ -1,238 +1,191 @@
-﻿// Datos de clientes dummy distribuidos en distintas carteras
-const clientesDummy = {
-    favacard: [
-        {
-            id: 1,
-            nombre: 'Carlos Mendoza',
-            dni: '12.345.678',
-            numeroId: 'FAV-001',
-            telefono: '+54 11 4567-8901',
-            email: 'carlos.mendoza@email.com',
-            direccion: 'Av. Corrientes 1234, CABA',
-            fechaNacimiento: '15/03/1985',
-            montoAdeudado: 125000,
-            fechaVencimiento: '15/12/2023',
-            ultimaGestion: '05/01/2024',
-            cuotasPendientes: 12,
-            cuotasPagadas: 8,
-            entidadFinanciera: 'Banco Nacional S.A.',
-            observaciones: 'Cliente con historial de pagos irregular. Última cuota pagada hace 6 meses. Presenta disposición a negociar.',
-            estado: 'contactado',
-            diasMora: 45,
-            clienteId: '#12345'
-        },
-        {
-            id: 2,
-            nombre: 'María Rodríguez',
-            dni: '23.456.789',
-            numeroId: 'FAV-002',
-            telefono: '+54 11 5234-5678',
-            email: 'maria.rodriguez@email.com',
-            direccion: 'Libertador 5678, CABA',
-            fechaNacimiento: '22/07/1990',
-            montoAdeudado: 85000,
-            fechaVencimiento: '10/11/2023',
-            ultimaGestion: '02/01/2024',
-            cuotasPendientes: 8,
-            cuotasPagadas: 10,
-            entidadFinanciera: 'Banco Nacional S.A.',
-            observaciones: 'Cliente comunicativa. Ha realizado pagos parciales. Negociación en curso.',
-            estado: 'con-arreglo',
-            diasMora: 60,
-            clienteId: '#12346'
-        },
-        {
-            id: 3,
-            nombre: 'Luis Fernández',
-            dni: '34.567.890',
-            numeroId: 'FAV-003',
-            telefono: '+54 11 4789-1234',
-            email: 'luis.fernandez@email.com',
-            direccion: 'Rivadavia 9876, CABA',
-            fechaNacimiento: '08/12/1988',
-            montoAdeudado: 95000,
-            fechaVencimiento: '20/12/2023',
-            ultimaGestion: '28/12/2023',
-            cuotasPendientes: 15,
-            cuotasPagadas: 3,
-            entidadFinanciera: 'Banco Nacional S.A.',
-            observaciones: 'Primer contacto pendiente. Cliente no responde llamadas.',
-            estado: 'sin-gestion',
-            diasMora: 50,
-            clienteId: '#12347'
-        },
-        {
-            id: 4,
-            nombre: 'Ana Martínez',
-            dni: '45.678.901',
-            numeroId: 'FAV-004',
-            telefono: '+54 11 5123-4567',
-            email: 'ana.martinez@email.com',
-            direccion: 'Córdoba 2345, CABA',
-            fechaNacimiento: '03/05/1992',
-            montoAdeudado: 67000,
-            fechaVencimiento: '05/11/2023',
-            ultimaGestion: '01/01/2024',
-            cuotasPendientes: 6,
-            cuotasPagadas: 12,
-            entidadFinanciera: 'Banco Nacional S.A.',
-            observaciones: 'Deuda antigua. Cliente con problemas económicos. Evaluar situación.',
-            estado: 'contactado',
-            diasMora: 70,
-            clienteId: '#12348'
-        }
-    ],
-    naldo: [
-        {
-            id: 5,
-            nombre: 'Roberto Silva',
-            dni: '56.789.012',
-            numeroId: 'NAL-001',
-            telefono: '+54 11 4567-8901',
-            email: 'roberto.silva@email.com',
-            direccion: 'Santa Fe 3456, CABA',
-            fechaNacimiento: '19/09/1985',
-            montoAdeudado: 145000,
-            fechaVencimiento: '18/12/2023',
-            ultimaGestion: '04/01/2024',
-            cuotasPendientes: 14,
-            cuotasPagadas: 6,
-            entidadFinanciera: 'Naldo Finanzas',
-            observaciones: 'Cliente con trabajo estable. Muestra interés en regularizar situación.',
-            estado: 'contactado',
-            diasMora: 55,
-            clienteId: '#12349'
-        },
-        {
-            id: 6,
-            nombre: 'Patricia López',
-            dni: '67.890.123',
-            numeroId: 'NAL-002',
-            telefono: '+54 11 5234-5678',
-            email: 'patricia.lopez@email.com',
-            direccion: 'Florida 4567, CABA',
-            fechaNacimiento: '11/04/1987',
-            montoAdeudado: 98000,
-            fechaVencimiento: '22/11/2023',
-            ultimaGestion: '03/01/2024',
-            cuotasPendientes: 10,
-            cuotasPagadas: 8,
-            entidadFinanciera: 'Naldo Finanzas',
-            observaciones: 'Cliente ha cumplido con promesas anteriores. Plan de pago activo.',
-            estado: 'con-arreglo',
-            diasMora: 65,
-            clienteId: '#12350'
-        },
-        {
-            id: 7,
-            nombre: 'Jorge García',
-            dni: '78.901.234',
-            numeroId: 'NAL-003',
-            telefono: '+54 11 4789-1234',
-            email: 'jorge.garcia@email.com',
-            direccion: 'Lavalle 7890, CABA',
-            fechaNacimiento: '27/11/1983',
-            montoAdeudado: 180000,
-            fechaVencimiento: '30/12/2023',
-            ultimaGestion: '15/12/2023',
-            cuotasPendientes: 18,
-            cuotasPagadas: 2,
-            entidadFinanciera: 'Naldo Finanzas',
-            observaciones: 'Cliente elusivo. No responde comunicación. Considerar incobrable.',
-            estado: 'incobrable',
-            diasMora: 40,
-            clienteId: '#12351'
-        },
-        {
-            id: 8,
-            nombre: 'Sofía Herrera',
-            dni: '89.012.345',
-            numeroId: 'NAL-004',
-            telefono: '+54 11 5123-4567',
-            email: 'sofia.herrera@email.com',
-            direccion: 'Alvear 1234, CABA',
-            fechaNacimiento: '14/06/1991',
-            montoAdeudado: 72000,
-            fechaVencimiento: '12/11/2023',
-            ultimaGestion: '29/12/2023',
-            cuotasPendientes: 5,
-            cuotasPagadas: 13,
-            entidadFinanciera: 'Naldo Finanzas',
-            observaciones: 'Cliente regulariza deuda. Últimos pagos al día. Seguimiento continuo.',
-            estado: 'con-arreglo',
-            diasMora: 75,
-            clienteId: '#12352'
-        }
-    ],
-    naranjax: [
-        {
-            id: 9,
-            nombre: 'Diego Torres',
-            dni: '90.123.456',
-            numeroId: 'NAR-001',
-            telefono: '+54 11 4456-7890',
-            email: 'diego.torres@email.com',
-            direccion: 'Cabildo 5678, CABA',
-            fechaNacimiento: '09/02/1986',
-            montoAdeudado: 110000,
-            fechaVencimiento: '25/12/2023',
-            ultimaGestion: '06/01/2024',
-            cuotasPendientes: 11,
-            cuotasPagadas: 7,
-            entidadFinanciera: 'NaranjaX S.A.',
-            observaciones: 'Cliente negocia activamente. Propuestas de pago en evaluación.',
-            estado: 'contactado',
-            diasMora: 48,
-            clienteId: '#12353'
-        },
-        {
-            id: 10,
-            nombre: 'Laura Díaz',
-            dni: '01.234.567',
-            numeroId: 'NAR-002',
-            telefono: '+54 11 5345-6789',
-            email: 'laura.diaz@email.com',
-            direccion: 'San Martín 9012, CABA',
-            fechaNacimiento: '31/08/1989',
-            montoAdeudado: 83000,
-            fechaVencimiento: '08/11/2023',
-            ultimaGestion: '30/12/2023',
-            cuotasPendientes: 7,
-            cuotasPagadas: 11,
-            entidadFinanciera: 'NaranjaX S.A.',
-            observaciones: 'Casos cerrados. Cliente de baja del sistema.',
-            estado: 'de-baja',
-            diasMora: 80,
-            clienteId: '#12354'
-        }
-    ]
-};
+﻿// Dashboard Gestor - Integrado con APIs reales
 
-// Cliente actual
+// Variables globales
 let clienteActual = null;
-let carteraActual = 'favacard';
+let carteraActual = 'Cartera A';  // Cambiar a nombres de carteras reales
 let indiceClienteActual = 0;
 let clientesCarteraActual = [];
+let todosLosCasos = [];  // Todos los casos cargados desde la API
+let isLoading = false;
+
+// Mapeo de carteras del frontend a carteras de la BD
+const carteraMapping = {
+    'favacard': 'Cartera A',
+    'naldo': 'Cartera B',
+    'naranjax': 'Cartera C'
+};
+
+// Mapeo inverso
+const carteraMappingReverse = {
+    'Cartera A': 'favacard',
+    'Cartera B': 'naldo',
+    'Cartera C': 'naranjax'
+};
+
+// Función para convertir Case de la API a formato cliente del frontend
+function mapCaseToCliente(caseData) {
+    // Extraer información de contacto de las notas si está disponible
+    const notes = caseData.notes || '';
+    const phoneMatch = notes.match(/Contacto: ([^\n]+)/);
+    const emailMatch = notes.match(/Email: ([^\n]+)/);
+    const addressMatch = notes.match(/Dirección: ([^\n]+)/);
+    const idMatch = notes.match(/ID: ([^\n]+)/);
+    
+    // Usar management_status si está disponible (estado detallado del frontend)
+    // Si no, mapear desde status (compatibilidad hacia atrás)
+    let estado = 'sin-gestion';
+    
+    if (caseData.management_status) {
+        // Usar el estado detallado guardado en la BD
+        estado = caseData.management_status;
+    } else {
+        // Mapeo de respaldo si no hay management_status
+        const statusMap = {
+            'en_gestion': 'contactado',
+            'promesa': 'con-arreglo',
+            'pagada': 'pagada',
+            'incobrable': 'incobrable'
+        };
+        estado = statusMap[caseData.status] || 'sin-gestion';
+        
+        // Si tiene promesas pendientes, asegurar que esté en 'con-arreglo'
+        if (caseData.promises && caseData.promises.length > 0) {
+            const hasPendingPromise = caseData.promises.some(p => p.status === 'pending');
+            if (hasPendingPromise && caseData.status === 'promesa') {
+                estado = 'con-arreglo';
+            }
+        }
+    }
+    
+    // Obtener última actividad
+    let ultimaGestion = 'N/A';
+    if (caseData.activities && caseData.activities.length > 0) {
+        const lastActivity = caseData.activities[0];
+        if (lastActivity.created_at) {
+            const date = new Date(lastActivity.created_at);
+            ultimaGestion = date.toLocaleDateString('es-AR');
+        }
+    }
+    
+    return {
+        id: caseData.id,
+        nombre: caseData.debtor_name,
+        dni: caseData.dni || 'N/A',
+        numeroId: idMatch ? idMatch[1] : `CASE-${caseData.id}`,
+        telefono: phoneMatch ? phoneMatch[1] : 'N/A',
+        email: emailMatch ? emailMatch[1] : 'N/A',
+        direccion: addressMatch ? addressMatch[1] : 'N/A',
+        fechaNacimiento: 'N/A',  // No está en el modelo Case
+        montoAdeudado: caseData.amount || 0,
+        fechaVencimiento: 'N/A',  // No está en el modelo Case
+        ultimaGestion: ultimaGestion,
+        cuotasPendientes: 0,  // No está en el modelo Case
+        cuotasPagadas: 0,  // No está en el modelo Case
+        entidadFinanciera: caseData.entity,
+        observaciones: notes || 'Sin observaciones',
+        estado: estado,
+        diasMora: 0,  // Calcular si es necesario
+        clienteId: `#${caseData.id}`,
+        cartera: caseData.cartera,
+        caseId: caseData.id  // Guardar ID del caso para actualizaciones
+    };
+}
+
+// Función para cargar casos desde la API
+async function loadCasosFromAPI() {
+    if (isLoading) return;
+    
+    isLoading = true;
+    try {
+        const response = await fetch('/api/cases/gestor');
+        const result = await response.json();
+        
+        if (result.success) {
+            todosLosCasos = result.data;
+            console.log(`[OK] Cargados ${todosLosCasos.length} casos desde la API`);
+            
+            // Convertir a formato cliente
+            const clientes = todosLosCasos.map(mapCaseToCliente);
+            
+            // Agrupar por cartera
+            const clientesPorCartera = {
+                'favacard': clientes.filter(c => c.cartera === 'Cartera A'),
+                'naldo': clientes.filter(c => c.cartera === 'Cartera B'),
+                'naranjax': clientes.filter(c => c.cartera === 'Cartera C')
+            };
+            
+            // Actualizar cartera actual si no hay casos en la actual
+            if (clientesPorCartera[carteraMappingReverse[carteraActual]].length === 0) {
+                // Buscar primera cartera con casos
+                for (const [key, carteraName] of Object.entries(carteraMapping)) {
+                    if (clientesPorCartera[key].length > 0) {
+                        carteraActual = carteraName;
+                        break;
+                    }
+                }
+            }
+            
+            // Actualizar lista de clientes
+            clientesCarteraActual = clientesPorCartera[carteraMappingReverse[carteraActual]] || [];
+            
+            // Cargar primer cliente si hay
+            if (clientesCarteraActual.length > 0) {
+                indiceClienteActual = 0;
+                loadCliente(clientesCarteraActual[0], 0);
+            } else {
+                // Mostrar mensaje de que no hay casos
+                showNoCasesMessage();
+            }
+            
+            // Actualizar contador total
+            updateTotalCounter();
+        } else {
+            console.error('[ERROR] Error cargando casos:', result.error);
+            showErrorMessage('Error al cargar casos: ' + result.error);
+        }
+    } catch (error) {
+        console.error('[ERROR] Error en fetch:', error);
+        showErrorMessage('Error de conexión al cargar casos');
+    } finally {
+        isLoading = false;
+    }
+}
 
 // Función para obtener lista de clientes de la cartera actual
 function getClientesCartera() {
-    return clientesDummy[carteraActual] || [];
+    const carteraKey = carteraMappingReverse[carteraActual] || 'favacard';
+    
+    // Si ya tenemos casos cargados, filtrar por cartera
+    if (todosLosCasos.length > 0) {
+        const clientes = todosLosCasos
+            .filter(c => c.cartera === carteraActual)
+            .map(mapCaseToCliente);
+        return clientes;
+    }
+    
+    return [];
 }
 
 // Función para cambiar de cartera y cargar primer cliente
 function changeCartera(cartera) {
-    carteraActual = cartera;
+    const carteraKey = carteraMappingReverse[cartera] || cartera;
+    const carteraName = carteraMapping[carteraKey] || cartera;
+    
+    carteraActual = carteraName;
     clientesCarteraActual = getClientesCartera();
+    
     if (clientesCarteraActual.length > 0) {
         indiceClienteActual = 0;
         loadCliente(clientesCarteraActual[0], 0);
-        updateCarteraSelector(cartera);
+        updateCarteraSelector(carteraKey);
         limpiarBusqueda();
+    } else {
+        showNoCasesMessage();
     }
 }
 
-// Función para navegar entre clientes
-function navegarCliente(direccion) {
+// Función para navegar entre clientes (GLOBAL - usada por onclick en HTML)
+window.navegarCliente = function(direccion) {
     clientesCarteraActual = getClientesCartera();
     if (clientesCarteraActual.length === 0) return;
 
@@ -245,8 +198,8 @@ function navegarCliente(direccion) {
     loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
 }
 
-// Función para ir a un nÁºmero de cliente específico
-function irACliente() {
+// Función para ir a un número de cliente específico (GLOBAL - usada por onclick en HTML)
+window.irACliente = function() {
     const input = document.getElementById('go-to-number');
     const numeroCliente = parseInt(input.value);
     
@@ -266,11 +219,11 @@ function irACliente() {
         return;
     }
 
-    // Limpiar bÁºsqueda si existe
+    // Limpiar búsqueda si existe
     document.getElementById('search-input').value = '';
     document.getElementById('btn-clear-search').style.display = 'none';
 
-    // Los nÁºmeros de cliente van de 1 a N, pero el índice es 0 a N-1
+    // Los números de cliente van de 1 a N, pero el índice es 0 a N-1
     indiceClienteActual = numeroCliente - 1;
     loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
     
@@ -279,8 +232,8 @@ function irACliente() {
     input.blur();
 }
 
-// Función para buscar cliente
-function buscarCliente(busqueda) {
+// Función para buscar cliente (GLOBAL - usada por onkeyup en HTML)
+window.buscarCliente = function(busqueda) {
     if (!busqueda || busqueda.trim() === '') {
         limpiarBusqueda();
         return;
@@ -309,8 +262,8 @@ function buscarCliente(busqueda) {
     }
 }
 
-// Función para limpiar bÁºsqueda
-function limpiarBusqueda() {
+// Función para limpiar búsqueda (GLOBAL - usada por onclick en HTML)
+window.limpiarBusqueda = function() {
     document.getElementById('search-input').value = '';
     document.getElementById('btn-clear-search').style.display = 'none';
     document.getElementById('go-to-number').value = '';
@@ -328,66 +281,208 @@ function loadCliente(cliente, indice) {
     clientesCarteraActual = getClientesCartera();
     
     // Actualizar encabezado
-    document.getElementById('client-name-header').textContent = cliente.nombre;
-    document.getElementById('client-id-header').textContent = cliente.clienteId;
-    document.getElementById('client-dni-header').textContent = cliente.dni;
-    document.getElementById('client-numero-id-header').textContent = cliente.numeroId;
+    const nameHeader = document.getElementById('client-name-header');
+    const idHeader = document.getElementById('client-id-header');
+    const dniHeader = document.getElementById('client-dni-header');
+    const numeroIdHeader = document.getElementById('client-numero-id-header');
+    
+    if (nameHeader) nameHeader.textContent = cliente.nombre;
+    if (idHeader) idHeader.textContent = cliente.clienteId;
+    if (dniHeader) dniHeader.textContent = cliente.dni;
+    if (numeroIdHeader) numeroIdHeader.textContent = cliente.numeroId;
     
     // Actualizar datos del cliente
-    document.getElementById('client-name').textContent = cliente.nombre;
-    document.getElementById('client-dni').textContent = cliente.dni;
-    document.getElementById('client-numero-id').textContent = cliente.numeroId;
-    document.getElementById('client-phone').innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono}`;
-    document.getElementById('client-email').innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email}`;
-    document.getElementById('client-address').innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion}`;
-    document.getElementById('client-birthdate').textContent = cliente.fechaNacimiento;
+    const nameEl = document.getElementById('client-name');
+    const dniEl = document.getElementById('client-dni');
+    const numeroIdEl = document.getElementById('client-numero-id');
+    const phoneEl = document.getElementById('client-phone');
+    const emailEl = document.getElementById('client-email');
+    const addressEl = document.getElementById('client-address');
+    const birthdateEl = document.getElementById('client-birthdate');
+    
+    if (nameEl) nameEl.textContent = cliente.nombre;
+    if (dniEl) dniEl.textContent = cliente.dni;
+    if (numeroIdEl) numeroIdEl.textContent = cliente.numeroId;
+    if (phoneEl) phoneEl.innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono}`;
+    if (emailEl) emailEl.innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email}`;
+    if (addressEl) addressEl.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion}`;
+    if (birthdateEl) birthdateEl.textContent = cliente.fechaNacimiento;
     
     // Actualizar cartera
     const carteraNames = {
         'favacard': 'Favacard',
         'naldo': 'Naldo',
-        'naranjax': 'NaranjaX'
+        'naranjax': 'NaranjaX',
+        'Cartera A': 'Favacard',
+        'Cartera B': 'Naldo',
+        'Cartera C': 'NaranjaX'
     };
-    document.getElementById('client-cartera').innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${carteraNames[cliente.cartera || carteraActual]}`;
+    const carteraEl = document.getElementById('client-cartera');
+    if (carteraEl) {
+        const carteraKey = carteraMappingReverse[cliente.cartera] || 'favacard';
+        carteraEl.innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${carteraNames[carteraKey] || cliente.cartera}`;
+    }
     
     // Actualizar datos de la deuda
-    document.getElementById('debt-total-amount').textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
-    document.getElementById('debt-due-date').textContent = cliente.fechaVencimiento;
-    document.getElementById('debt-last-management').textContent = cliente.ultimaGestion;
-    document.getElementById('debt-installments').innerHTML = `<span class="text-red-600">${cliente.cuotasPendientes}</span> / <span class="text-green-600">${cliente.cuotasPagadas}</span>`;
-    document.getElementById('debt-entity').textContent = cliente.entidadFinanciera;
-    document.getElementById('debt-notes').textContent = cliente.observaciones;
+    const debtAmountEl = document.getElementById('debt-total-amount');
+    const debtDueDateEl = document.getElementById('debt-due-date');
+    const debtLastMgmtEl = document.getElementById('debt-last-management');
+    const debtInstallmentsEl = document.getElementById('debt-installments');
+    const debtEntityEl = document.getElementById('debt-entity');
+    const debtNotesEl = document.getElementById('debt-notes');
+    
+    if (debtAmountEl) debtAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
+    if (debtDueDateEl) debtDueDateEl.textContent = cliente.fechaVencimiento;
+    if (debtLastMgmtEl) debtLastMgmtEl.textContent = cliente.ultimaGestion;
+    if (debtInstallmentsEl) debtInstallmentsEl.innerHTML = `<span class="text-red-600">${cliente.cuotasPendientes}</span> / <span class="text-green-600">${cliente.cuotasPagadas}</span>`;
+    if (debtEntityEl) debtEntityEl.textContent = cliente.entidadFinanciera;
+    if (debtNotesEl) debtNotesEl.textContent = cliente.observaciones;
     
     // Actualizar resumen
-    document.getElementById('summary-amount').textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
-    document.getElementById('summary-days-overdue').textContent = `${cliente.diasMora} días`;
+    const summaryAmountEl = document.getElementById('summary-amount');
+    const summaryDaysEl = document.getElementById('summary-days-overdue');
     
-    // Actualizar estado
+    if (summaryAmountEl) summaryAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
+    if (summaryDaysEl) summaryDaysEl.textContent = `${cliente.diasMora} días`;
+    
+    // Actualizar case_id en formularios - CRÍTICO: debe actualizarse siempre
+    const currentCaseIdEl = document.getElementById('current-case-id');
+    const managementCaseIdEl = document.getElementById('management-case-id');
+    const caseIdValue = String(cliente.caseId || cliente.id || '');
+    
+    console.log(`[DEBUG] loadCliente - Cliente: ${cliente.nombre}, caseId: ${cliente.caseId}, id: ${cliente.id}, estado: ${cliente.estado}`);
+    
+    if (currentCaseIdEl) {
+        currentCaseIdEl.value = caseIdValue;
+        console.log(`[DEBUG] ✓ Actualizado current-case-id: "${caseIdValue}" para cliente: ${cliente.nombre}`);
+    } else {
+        console.error('[ERROR] ✗ No se encontró elemento current-case-id en el DOM');
+    }
+    
+    if (managementCaseIdEl) {
+        managementCaseIdEl.value = caseIdValue;
+        console.log(`[DEBUG] ✓ Actualizado management-case-id: "${caseIdValue}"`);
+    } else {
+        console.warn('[WARN] No se encontró elemento management-case-id (puede ser normal)');
+    }
+    
+    // Actualizar estado del selector - debe reflejar el estado real del caso
     const statusMap = {
         'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
         'contactado': { text: 'Contactado', class: 'status-contactado' },
         'con-arreglo': { text: 'Con Arreglo', class: 'status-con-arreglo' },
         'incobrable': { text: 'Incobrable', class: 'status-incobrable' },
-        'de-baja': { text: 'De Baja', class: 'status-de-baja' }
+        'de-baja': { text: 'De Baja', class: 'status-de-baja' },
+        'pagada': { text: 'Pagada', class: 'status-pagada' }
     };
     
-    const statusInfo = statusMap[cliente.estado];
-    document.getElementById('status-selector').value = cliente.estado;
+    const statusInfo = statusMap[cliente.estado] || statusMap['sin-gestion'];
+    const statusSelectorEl = document.getElementById('status-selector');
+    if (statusSelectorEl) {
+        // Asegurar que el selector muestre el estado correcto
+        statusSelectorEl.value = cliente.estado;
+        console.log(`[DEBUG] Estado del selector actualizado a: ${cliente.estado} para caso ${cliente.caseId || cliente.id}`);
+        
+        // Remover event listener anterior si existe
+        const newSelector = statusSelectorEl.cloneNode(true);
+        statusSelectorEl.parentNode.replaceChild(newSelector, statusSelectorEl);
+        
+        // Agregar event listener para guardar cambios
+        newSelector.addEventListener('change', async function(e) {
+            const newStatus = e.target.value;
+            const caseId = document.getElementById('current-case-id')?.value;
+            
+            console.log(`[DEBUG] Cambiando estado de caso ${caseId} a: ${newStatus}`);
+            
+            if (!caseId) {
+                console.error('[ERROR] No hay case_id');
+                alert('Error: No se puede cambiar el estado sin un cliente seleccionado.');
+                e.target.value = cliente.estado; // Restaurar
+                return;
+            }
+            
+            // Mostrar loading
+            const loadingEl = document.getElementById('status-loading');
+            if (loadingEl) loadingEl.style.display = 'flex';
+            
+            try {
+                const formData = new FormData();
+                formData.append('case_id', caseId);
+                formData.append('status-selector', newStatus);
+                
+                const response = await fetch('/api/update-status', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    console.log('[OK] Estado actualizado en BD');
+                    updateStatusBadge(newStatus);
+                    
+                    // Actualizar el clienteActual inmediatamente
+                    if (clienteActual) {
+                        clienteActual.estado = newStatus;
+                        console.log(`[DEBUG] clienteActual.estado actualizado a: ${newStatus}`);
+                    }
+                    
+                    // Actualizar en todosLosCasos inmediatamente
+                    const caseIndex = todosLosCasos.findIndex(c => c.id === caseId);
+                    if (caseIndex !== -1) {
+                        todosLosCasos[caseIndex].management_status = newStatus;
+                        console.log(`[DEBUG] todosLosCasos[${caseIndex}].management_status actualizado`);
+                    }
+                    
+                    // Actualizar en clientesCarteraActual inmediatamente
+                    const clienteIndex = clientesCarteraActual.findIndex(c => c.caseId == caseId);
+                    if (clienteIndex !== -1) {
+                        clientesCarteraActual[clienteIndex].estado = newStatus;
+                        console.log(`[DEBUG] clientesCarteraActual[${clienteIndex}].estado actualizado`);
+                    }
+                    
+                    // Recargar el caso para confirmar (esto actualizará los arrays de nuevo con datos frescos de la BD)
+                    setTimeout(() => reloadCurrentCase(), 500);
+                } else {
+                    console.error('[ERROR] Error actualizando estado:', await response.text());
+                    alert('Error al guardar el estado');
+                    e.target.value = cliente.estado; // Restaurar
+                }
+            } catch (error) {
+                console.error('[ERROR] Error en petición:', error);
+                alert('Error al guardar el estado');
+                e.target.value = cliente.estado; // Restaurar
+            } finally {
+                // Ocultar loading
+                if (loadingEl) loadingEl.style.display = 'none';
+            }
+        });
+    }
     updateStatusBadge(cliente.estado);
+    
+    // Cargar gestiones del cliente
+    if (cliente.caseId) {
+        loadActivities(cliente.caseId);
+    }
     
     // Actualizar contador de clientes
     const total = clientesCarteraActual.length;
     const actual = indice + 1;
-    document.getElementById('cliente-counter').textContent = `Cliente ${actual} de ${total}`;
+    const counterEl = document.getElementById('cliente-counter');
+    if (counterEl) {
+        counterEl.textContent = `Cliente ${actual} de ${total}`;
+    }
     
     // Actualizar estado de botones de navegación
     const btnPrev = document.getElementById('btn-prev-cliente');
     const btnNext = document.getElementById('btn-next-cliente');
-    btnPrev.disabled = total <= 1;
-    btnNext.disabled = total <= 1;
+    if (btnPrev) btnPrev.disabled = total <= 1;
+    if (btnNext) btnNext.disabled = total <= 1;
     
     // Recargar iconos
-    setTimeout(() => lucide.createIcons(), 100);
+    setTimeout(() => {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }, 100);
 }
 
 // Función para actualizar el selector de cartera
@@ -397,13 +492,19 @@ function updateCarteraSelector(cartera) {
         'naldo': '📁 Naldo',
         'naranjax': '📁 NaranjaX'
     };
-    document.getElementById('cartera-selected-text').textContent = carteraNames[cartera];
+    const selectedTextEl = document.getElementById('cartera-selected-text');
+    if (selectedTextEl) {
+        selectedTextEl.textContent = carteraNames[cartera] || cartera;
+    }
 }
 
 // Función para abrir/cerrar el dropdown de carteras
-function toggleCarteraDropdown() {
+// Función para toggle del dropdown de cartera (GLOBAL - usada por onclick en HTML)
+window.toggleCarteraDropdown = function() {
     const menu = document.getElementById('cartera-dropdown-menu');
     const chevron = document.getElementById('cartera-chevron');
+    if (!menu || !chevron) return;
+    
     const isHidden = menu.classList.contains('hidden');
     
     if (isHidden) {
@@ -416,13 +517,15 @@ function toggleCarteraDropdown() {
 }
 
 // Función para seleccionar una cartera desde el dropdown
-function selectCartera(cartera, displayText) {
+// Función para seleccionar cartera (GLOBAL - usada por onclick en HTML)
+window.selectCartera = function(cartera, displayText) {
     changeCartera(cartera);
     toggleCarteraDropdown(); // Cerrar el dropdown
 }
 
 // Función para actualizar el badge de estado visualmente
-function updateStatusBadge(status) {
+// Función para actualizar el badge de estado (GLOBAL - usada por onchange en HTML)
+window.updateStatusBadge = function(status) {
     const statusMap = {
         'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
         'contactado': { text: 'Contactado', class: 'status-contactado' },
@@ -433,7 +536,7 @@ function updateStatusBadge(status) {
     
     const display = document.getElementById('current-status-display');
     const summaryStatus = document.getElementById('summary-status');
-    const statusInfo = statusMap[status];
+    const statusInfo = statusMap[status] || statusMap['sin-gestion'];
     
     if (display) {
         display.innerHTML = `<span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>`;
@@ -444,42 +547,265 @@ function updateStatusBadge(status) {
     }
 }
 
-// Función para guardar todo (estado + gestión si hay)
-function saveAll() {
-    // Esta función puede llamar a mÁºltiples endpoints HTMX o hacer un guardado general
-    alert('Funcionalidad de guardado general - se implementará con backend');
+// Función para recargar el caso actual desde la API (definida globalmente)
+async function reloadCurrentCase() {
+    if (!clienteActual || !clienteActual.caseId) {
+        console.log('[WARN] No hay caso seleccionado para recargar');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/cases/${clienteActual.caseId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            // Actualizar el caso en todosLosCasos (array en memoria)
+            const caseIndex = todosLosCasos.findIndex(c => c.id === result.data.id);
+            if (caseIndex !== -1) {
+                todosLosCasos[caseIndex] = result.data;
+                console.log(`[DEBUG] Actualizado caso en todosLosCasos[${caseIndex}]`);
+            }
+            
+            // Actualizar el cliente actual con datos frescos
+            const updatedCliente = mapCaseToCliente(result.data);
+            clienteActual = updatedCliente;
+            
+            // Actualizar también en clientesCarteraActual
+            const clienteIndex = clientesCarteraActual.findIndex(c => c.caseId === updatedCliente.caseId);
+            if (clienteIndex !== -1) {
+                clientesCarteraActual[clienteIndex] = updatedCliente;
+                console.log(`[DEBUG] Actualizado cliente en clientesCarteraActual[${clienteIndex}]`);
+            }
+            
+            // Actualizar el selector de estado
+            const statusSelector = document.getElementById('status-selector');
+            if (statusSelector) {
+                statusSelector.value = updatedCliente.estado;
+            }
+            updateStatusBadge(updatedCliente.estado);
+            
+            // Actualizar case_id en formularios
+            const currentCaseIdEl = document.getElementById('current-case-id');
+            const managementCaseIdEl = document.getElementById('management-case-id');
+            if (currentCaseIdEl) currentCaseIdEl.value = updatedCliente.caseId || '';
+            if (managementCaseIdEl) managementCaseIdEl.value = updatedCliente.caseId || '';
+            
+            console.log(`[OK] Caso ${updatedCliente.caseId} recargado y actualizado en memoria, estado: ${updatedCliente.estado}`);
+        }
+    } catch (error) {
+        console.error('[ERROR] Error recargando caso:', error);
+    }
 }
 
-// Manejar el envío del formulario de gestión
-document.getElementById('management-form').addEventListener('htmx:afterRequest', function(event) {
-    if (event.detail.successful) {
-        // Limpiar el textarea después de guardar
-        document.getElementById('management-note').value = '';
-        // Recargar iconos después de actualizar el DOM
-        setTimeout(() => lucide.createIcons(), 100);
+// Función para actualizar estado y guardar en BD (ya no se usa directamente, HTMX lo maneja)
+async function updateStatusAndSave(status) {
+    // Esta función ya no es necesaria porque HTMX maneja el POST
+    // Pero la mantenemos por compatibilidad
+    console.log('[INFO] Estado actualizado por HTMX, recargando caso...');
+    setTimeout(() => {
+        reloadCurrentCase();
+    }, 500);
+}
+
+// Función para cargar gestiones de un caso
+async function loadActivities(caseId) {
+    if (!caseId) {
+        console.warn('[WARN] No hay case_id para cargar gestiones');
+        return;
     }
-});
+    
+    try {
+        const response = await fetch(`/api/activities/case/${caseId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const activities = result.data;
+            console.log(`[OK] Cargadas ${activities.length} gestiones para caso ${caseId}`);
+            
+            const historyContainer = document.getElementById('management-history');
+            if (!historyContainer) return;
+            
+            if (activities.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No hay gestiones registradas para este cliente</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+                return;
+            }
+            
+            // Renderizar gestiones
+            historyContainer.innerHTML = activities.map(activity => {
+                const date = new Date(activity.created_at);
+                const formattedDate = date.toLocaleDateString('es-AR') + ' - ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                const borderColor = getBorderColorForActivity(activity.type);
+                
+                return `
+                    <div class="border-l-4 ${borderColor} pl-4 pb-4" id="activity-${activity.id}">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                                <span class="text-sm font-semibold text-gray-900">${activity.created_by || 'Usuario'}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500">${formattedDate}</span>
+                                <button 
+                                    onclick="deleteActivity(${activity.id})"
+                                    class="text-red-500 hover:text-red-700 transition-colors"
+                                    title="Eliminar gestión">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-700 leading-relaxed">${activity.notes || 'Sin notas'}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            // Reinicializar iconos de Lucide
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        } else {
+            console.error('[ERROR] Error cargando gestiones:', result.error);
+        }
+    } catch (error) {
+        console.error('[ERROR] Error en loadActivities:', error);
+    }
+}
+
+// Función auxiliar para obtener color de borde según tipo de actividad
+function getBorderColorForActivity(type) {
+    const colors = {
+        'call': 'border-blue-500',
+        'email': 'border-purple-500',
+        'visit': 'border-green-500',
+        'note': 'border-gray-500',
+        'payment': 'border-emerald-500',
+        'promise': 'border-yellow-500'
+    };
+    return colors[type] || 'border-gray-500';
+}
+
+// Función para eliminar una gestión (GLOBAL - usada por onclick en HTML)
+window.deleteActivity = async function(activityId) {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta gestión?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/activities/${activityId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log(`[OK] Gestión ${activityId} eliminada`);
+            
+            // Remover del DOM
+            const activityElement = document.getElementById(`activity-${activityId}`);
+            if (activityElement) {
+                activityElement.remove();
+            }
+            
+            // Verificar si no quedan gestiones
+            const historyContainer = document.getElementById('management-history');
+            if (historyContainer && historyContainer.children.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No hay gestiones registradas para este cliente</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            }
+        } else {
+            alert('Error al eliminar la gestión: ' + result.error);
+        }
+    } catch (error) {
+        console.error('[ERROR] Error eliminando gestión:', error);
+        alert('Error al eliminar la gestión');
+    }
+};
+
+// Función para mostrar mensaje cuando no hay casos
+function showNoCasesMessage() {
+    const mainContent = document.querySelector('.main-content') || document.body;
+    const message = document.createElement('div');
+    message.className = 'p-8 text-center';
+    message.innerHTML = `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <p class="text-yellow-800 font-semibold">No hay casos asignados en esta cartera</p>
+            <p class="text-yellow-600 text-sm mt-2">Los casos aparecerán aquí cuando te sean asignados</p>
+        </div>
+    `;
+    // Solo agregar si no existe ya
+    if (!document.getElementById('no-cases-message')) {
+        message.id = 'no-cases-message';
+        mainContent.appendChild(message);
+    }
+}
+
+// Función para mostrar mensaje de error
+function showErrorMessage(message) {
+    console.error(message);
+    // Puedes implementar un toast o alert aquí
+}
+
+// Función para actualizar contador total
+function updateTotalCounter() {
+    const total = todosLosCasos.length;
+    // Actualizar algún elemento del DOM si existe
+    console.log(`Total de casos: ${total}`);
+}
+
+// Ya no necesitamos este listener porque lo manejamos en el DOMContentLoaded
+// con htmx:afterSwap que es más específico y no recarga todos los casos
 
 // Inicializar cuando carga la página
 document.addEventListener('DOMContentLoaded', function() {
-    // Asignar cartera a cada cliente
-    Object.keys(clientesDummy).forEach(cartera => {
-        clientesDummy[cartera].forEach(cliente => {
-            cliente.cartera = cartera;
-        });
+    console.log('[INFO] Inicializando dashboard de gestor...');
+    
+    // Listener para limpiar formulario después de guardar gestión
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'management-history') {
+            console.log('[DEBUG] Gestión guardada, limpiando formulario...');
+            const form = document.getElementById('management-form');
+            if (form) {
+                form.reset();
+                // Mantener el case_id en el formulario
+                const managementCaseIdEl = document.getElementById('management-case-id');
+                if (managementCaseIdEl && clienteActual && clienteActual.caseId) {
+                    managementCaseIdEl.value = clienteActual.caseId;
+                }
+            }
+            
+            // NO recargar gestiones porque HTMX ya las agregó
+            // Solo reinicializar los iconos de Lucide
+            setTimeout(() => {
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            }, 100);
+        }
     });
     
-    // Inicializar cartera actual
-    clientesCarteraActual = getClientesCartera();
-    
-    // Cargar primer cliente de Favacard por defecto
-    if (clientesCarteraActual.length > 0) {
-        indiceClienteActual = 0;
-        loadCliente(clientesCarteraActual[0], 0);
-    }
+    // Cargar casos desde la API
+    loadCasosFromAPI();
     
     // Inicializar iconos
-    lucide.createIcons();
+    setTimeout(() => {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+    }, 500);
     
     // Cerrar dropdown de carteras al hacer clic fuera
     document.addEventListener('click', function(event) {
@@ -487,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const button = document.getElementById('cartera-dropdown-btn');
         const chevron = document.getElementById('cartera-chevron');
         
-        if (dropdown && !dropdown.contains(event.target) && !button.contains(event.target)) {
+        if (dropdown && button && !dropdown.contains(event.target) && !button.contains(event.target)) {
             dropdown.classList.add('hidden');
             if (chevron) {
                 chevron.style.transform = 'rotate(0deg)';
@@ -514,4 +840,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    
+    // Ya no necesitamos reconnectStatusSelector porque ahora el listener se agrega en loadCliente
+    
+    // Ya no usamos HTMX para actualizar el estado, lo hacemos con fetch directamente
 });
