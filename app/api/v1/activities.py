@@ -2,7 +2,7 @@
 Endpoints API para gestiones/actividades.
 """
 
-from flask import Blueprint, request, jsonify, session
+from flask import jsonify, session
 from ...core.database import db
 from ...features.activities.models import Activity
 from ...features.cases.models import Case

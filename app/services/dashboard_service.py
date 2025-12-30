@@ -5,8 +5,7 @@ Servicio para agregación de datos del dashboard.
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
-from sqlalchemy import func, and_, or_
-from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 
 from ..core.database import db
 from ..models import Case, Promise, Activity, User
@@ -184,7 +183,7 @@ def get_gestores_ranking(limit: int = 10) -> List[Dict]:
     Returns:
         Lista de gestores con sus métricas
     """
-    gestores = User.query.filter(User.role == "gestor", User.active == True).all()
+    gestores = User.query.filter(User.role == "gestor", User.active.is_(True)).all()
 
     ranking = []
     for gestor in gestores:

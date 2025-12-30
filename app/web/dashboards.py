@@ -1,5 +1,4 @@
-from pathlib import Path
-from flask import Blueprint, send_file, current_app, render_template, session
+from flask import Blueprint, render_template, session
 
 from ..utils.security import require_role
 

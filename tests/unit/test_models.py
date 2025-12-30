@@ -123,7 +123,7 @@ def test_case_relationships(app, sample_case, sample_user):
         # Re-adjuntar objetos a la sesión actual
         case = db.session.merge(sample_case)
         user = db.session.merge(sample_user)
-        
+
         # Crear promesa
         promise = Promise(case_id=case.id, amount=Decimal("1000"), promise_date=date.today())
         db.session.add(promise)
@@ -132,7 +132,7 @@ def test_case_relationships(app, sample_case, sample_user):
         activity = Activity(case_id=case.id, type="call", created_by_id=user.id)
         db.session.add(activity)
         db.session.commit()
-        
+
         # Refrescar el caso para cargar las relaciones
         db.session.refresh(case)
         db.session.refresh(user)

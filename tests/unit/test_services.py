@@ -74,12 +74,12 @@ class TestStorageService:
     def test_save_submission_handles_database_errors(self, app):
         """Test que maneja errores de base de datos."""
         from unittest.mock import patch
-        
+
         with app.app_context():
             from app.core.database import db
 
             # Forzar un error usando mock para que commit falle
-            with patch.object(db.session, 'commit', side_effect=Exception("Database error")):
+            with patch.object(db.session, "commit", side_effect=Exception("Database error")):
                 # El servicio debería lanzar StorageError
                 with pytest.raises(StorageError):
                     save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")

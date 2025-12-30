@@ -2,8 +2,8 @@
 Endpoints API para datos del dashboard y casos.
 """
 
-from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify, session
+from datetime import datetime
+from flask import request, jsonify, session
 from flask import current_app as app
 from sqlalchemy import or_
 
@@ -11,7 +11,6 @@ from ...core.database import db
 from ...features.cases.models import Case
 from ...features.cases.promise import Promise
 from ...features.activities.models import Activity
-from ...features.users.models import User
 from ...services.dashboard import (
     get_kpis,
     get_performance_chart_data,
@@ -21,7 +20,7 @@ from ...services.dashboard import (
     get_comparison_data,
 )
 from ...utils.security import require_role
-from ...utils.exceptions import ValidationError, NotFoundError
+from ...utils.exceptions import ValidationError
 from ...services.audit import audit_log
 from ...services.cache import invalidate_cache
 
@@ -209,7 +208,7 @@ def create_case():
 def get_case(case_id):
     """Obtiene un caso por ID. Admin puede ver todos, gestor solo sus casos asignados."""
     from werkzeug.exceptions import NotFound
-    
+
     try:
         user_role = session.get("role")
         user_id = session.get("user_id")
@@ -298,7 +297,7 @@ def delete_case(case_id):
 def create_promise(case_id):
     """Crea una promesa de pago para un caso."""
     try:
-        case = Case.query.get_or_404(case_id)
+        case = Case.query.get_or_404(case_id)  # noqa: F841
         data = request.get_json()
 
         if "amount" not in data or "promise_date" not in data:
@@ -333,7 +332,7 @@ def create_promise(case_id):
 def create_activity(case_id):
     """Crea una actividad para un caso."""
     try:
-        case = Case.query.get_or_404(case_id)
+        case = Case.query.get_or_404(case_id)  # noqa: F841
         data = request.get_json()
 
         if "type" not in data:

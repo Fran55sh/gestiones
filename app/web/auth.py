@@ -4,9 +4,7 @@ from flask import current_app as app
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from ..core.database import db
 from ..features.users.models import User
-from ..utils.exceptions import AuthenticationError, ValidationError
 from ..services.audit import audit_log
 
 logger = logging.getLogger(__name__)
@@ -15,7 +13,7 @@ bp = Blueprint("auth", __name__)
 # Rate limiter para login
 try:
     limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["5 per minute"])
-except:
+except Exception:
     limiter = None
 
 

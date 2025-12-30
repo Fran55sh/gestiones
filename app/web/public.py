@@ -1,5 +1,5 @@
 from pathlib import Path
-from flask import Blueprint, send_file, send_from_directory, abort, current_app, request, render_template
+from flask import Blueprint, send_from_directory, abort, current_app, request, render_template
 
 bp = Blueprint("root", __name__)
 

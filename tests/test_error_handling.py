@@ -119,6 +119,6 @@ class TestErrorHandlersInApp:
 
         with app.app_context():
             # Forzar un error usando mock para que commit falle
-            with patch.object(db.session, 'commit', side_effect=Exception("Database error")):
+            with patch.object(db.session, "commit", side_effect=Exception("Database error")):
                 with pytest.raises(StorageError):
                     save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")

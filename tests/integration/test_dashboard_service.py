@@ -75,7 +75,7 @@ def test_get_kpis_with_filters(app, sample_data):
     with app.app_context():
         # Obtener el ID del gestor dentro del contexto
         gestor = User.query.filter_by(username="gestor").first()
-        
+
         kpis = get_kpis(cartera="Cartera A")
         assert "monto_recuperado" in kpis
 

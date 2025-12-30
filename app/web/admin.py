@@ -1,10 +1,9 @@
 from flask import Blueprint, jsonify, current_app
 import logging
 
-from ..core.database import db
 from ..features.contact.models import ContactSubmission
 from ..utils.security import require_role
-from ..utils.exceptions import NotFoundError, StorageError
+from ..utils.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("admin", __name__, url_prefix="/api")
