@@ -5,7 +5,7 @@ import pytest
 from datetime import datetime, date
 from decimal import Decimal
 
-from app.db import db
+from app.core.database import db
 from app.models import User, Case, Promise, Activity, ContactSubmission
 
 

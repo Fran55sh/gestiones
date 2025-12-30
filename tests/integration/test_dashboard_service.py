@@ -5,7 +5,7 @@ import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from app.db import db
+from app.core.database import db
 from app.models import User, Case, Promise, Activity
 from app.services.dashboard_service import (
     get_kpis, get_performance_chart_data, get_cartera_distribution,
