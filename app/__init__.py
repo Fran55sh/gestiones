@@ -93,8 +93,10 @@ def create_app() -> Flask:
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
-        # Migrate default users if they don't exist
-        _migrate_default_users(app)
+        # Migrate default users if they don't exist (skip in testing mode)
+        is_testing = os.getenv("TESTING", "").lower() in ["true", "1", "yes"]
+        if not is_testing and not app.config.get("TESTING", False):
+            _migrate_default_users(app)
 
     # Project paths in config
     app.config["ROOT_DIR"] = str(project_root)
