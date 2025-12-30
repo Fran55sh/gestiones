@@ -90,7 +90,7 @@ jobs:
       uses: docker/build-push-action@v4
       with:
         context: .
-        file: ./Dockerfile.prod
+        file: ./config/docker/Dockerfile.prod
         push: false
         tags: gestiones-mvp:latest
         cache-from: type=registry,ref=gestiones-mvp:buildcache
