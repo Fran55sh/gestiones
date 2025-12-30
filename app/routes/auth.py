@@ -1,15 +1,30 @@
 import logging
 from flask import Blueprint, request, session, redirect
 from flask import current_app as app
-from werkzeug.security import check_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
+from ..db import db
+from ..models import User
 from ..utils.exceptions import AuthenticationError, ValidationError
+from ..utils.audit import audit_log
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('auth', __name__)
 
+# Rate limiter para login
+try:
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["5 per minute"]
+    )
+except:
+    limiter = None
+
 
 @bp.route('/api/login', methods=['POST'])
+@limiter.limit("5 per minute") if limiter else lambda f: f
 def login():
     try:
         username = request.form.get('username', '').strip()
@@ -22,41 +37,41 @@ def login():
             return _login_error_response('La contraseña es requerida')
 
         logger.info(f"Intento de login para usuario: {username}")
-        users = app.config.get('USERS', {})
         
-        if not users:
-            logger.error("Configuración de usuarios no encontrada")
-            return _login_error_response('Error de configuración del sistema. Por favor, contacte al administrador.')
+        # Buscar usuario en base de datos
+        user = User.query.filter_by(username=username, active=True).first()
         
-        if username not in users:
-            logger.warning(f"Usuario {username} no encontrado")
+        if not user:
+            logger.warning(f"Usuario {username} no encontrado o inactivo")
+            audit_log('login_attempt', {'username': username, 'success': False, 'reason': 'user_not_found'})
             return _login_error_response('Credenciales inválidas. Por favor, intenta de nuevo.')
         
         # Verificar contraseña
-        user_data = users[username]
-        if 'password_hash' not in user_data:
-            logger.error(f"Usuario {username} no tiene password_hash configurado")
-            return _login_error_response('Error de configuración del sistema. Por favor, contacte al administrador.')
-        
-        if not check_password_hash(user_data['password_hash'], password):
+        if not user.check_password(password):
             logger.warning(f"Contraseña incorrecta para usuario {username}")
+            audit_log('login_attempt', {'username': username, 'success': False, 'reason': 'invalid_password'})
             return _login_error_response('Credenciales inválidas. Por favor, intenta de nuevo.')
         
         # Login exitoso
-        logger.info(f"Login exitoso para usuario: {username} (rol: {user_data.get('role')})")
+        logger.info(f"Login exitoso para usuario: {username} (rol: {user.role})")
         
         try:
             session.clear()
             session.permanent = True
             session['username'] = username
-            session['role'] = user_data.get('role', 'user')
+            session['role'] = user.role
+            session['user_id'] = user.id
+            
+            # Log de auditoría
+            audit_log('login', {'username': username, 'role': user.role, 'success': True})
         except Exception as e:
             logger.error(f"Error al establecer sesión: {e}", exc_info=True)
+            audit_log('login', {'username': username, 'success': False, 'error': str(e)})
             return _login_error_response('Error al iniciar sesión. Por favor, intenta de nuevo.')
 
         role_routes = {'admin': '/dashboard-admin', 'gestor': '/dashboard-gestor', 'user': '/dashboard-user'}
-        redirect_url = role_routes.get(user_data.get('role', 'user'), '/dashboard-user')
-        return _login_success_response(user_data.get('role', 'user'), redirect_url)
+        redirect_url = role_routes.get(user.role, '/dashboard-user')
+        return _login_success_response(user.role, redirect_url)
         
     except Exception as e:
         logger.error(f"Error inesperado en login: {e}", exc_info=True)
@@ -65,6 +80,8 @@ def login():
 
 @bp.route('/logout')
 def logout():
+    username = session.get('username')
+    audit_log('logout', {'username': username})
     session.clear()
     return redirect('/')
 

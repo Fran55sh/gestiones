@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, current_app
-import json
 import logging
-from pathlib import Path
 
+from ..db import db
+from ..models import ContactSubmission
 from ..utils.security import require_role
 from ..utils.exceptions import NotFoundError, StorageError
 
@@ -14,56 +14,15 @@ bp = Blueprint('admin', __name__, url_prefix='/api')
 @require_role('admin')
 def view_submissions():
     try:
-        file_path = current_app.config.get('CONTACT_SUBMISSIONS_FILE')
-        if not file_path:
-            raise StorageError(
-                "CONTACT_SUBMISSIONS_FILE no está configurado",
-                operation='read'
-            )
+        submissions = ContactSubmission.query.order_by(ContactSubmission.timestamp.desc()).all()
         
-        path = Path(file_path)
-        
-        if not path.exists():
-            logger.info("Archivo de solicitudes no existe, retornando lista vacía")
-            return jsonify({
-                'success': True,
-                'message': 'No hay solicitudes guardadas aún.',
-                'submissions': []
-            })
-        
-        try:
-            with path.open('r', encoding='utf-8') as f:
-                submissions = json.load(f)
+        logger.info(f"Leyendo {len(submissions)} solicitudes desde DB")
+        return jsonify({
+            'success': True,
+            'message': f'Total de solicitudes: {len(submissions)}',
+            'submissions': [s.to_dict() for s in submissions]
+        })
             
-            if not isinstance(submissions, list):
-                logger.warning(f"Archivo {path} no contiene una lista válida")
-                submissions = []
-            
-            logger.info(f"Leyendo {len(submissions)} solicitudes")
-            return jsonify({
-                'success': True,
-                'message': f'Total de solicitudes: {len(submissions)}',
-                'submissions': submissions
-            })
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parseando JSON en {path}: {e}")
-            raise StorageError(
-                f"El archivo de solicitudes está corrupto: {e}",
-                operation='read',
-                details={'file': str(path), 'json_error': str(e)}
-            )
-        except IOError as e:
-            logger.error(f"Error leyendo archivo {path}: {e}")
-            raise StorageError(
-                f"No se pudo leer el archivo de solicitudes: {e}",
-                operation='read',
-                details={'file': str(path), 'io_error': str(e)}
-            )
-            
-    except StorageError:
-        # Re-lanzar StorageError
-        raise
     except Exception as e:
         logger.error(f"Error inesperado leyendo solicitudes: {e}", exc_info=True)
         raise StorageError(
