@@ -13,7 +13,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 from werkzeug.exceptions import HTTPException
 
-from .core.database import db
+from .core.database import db  # Import correcto desde core.database
 from .features.users.models import User
 from .features.cases.models import Case
 from .features.cases.promise import Promise
