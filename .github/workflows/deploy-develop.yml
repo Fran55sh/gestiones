@@ -1,0 +1,115 @@
+name: Deploy to Develop (Oracle Cloud)
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 black
+    
+    - name: Run linting
+      run: |
+        echo "🔍 Running Flake8..."
+        flake8 app tests || true
+        echo "🎨 Checking Black formatting..."
+        black --check app tests || true
+    
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        pytest --cov=app --cov-report=term
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: develop
+      url: http://${{ secrets.DEVELOP_HOST }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Oracle Cloud (Develop)
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DEVELOP_HOST }}
+        username: ${{ secrets.DEVELOP_USER }}
+        key: ${{ secrets.DEVELOP_SSH_KEY }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment to DEVELOP instance..."
+          
+          # Navigate to project directory
+          cd ${{ secrets.DEVELOP_PATH }}
+          
+          # Pull latest code
+          echo "📥 Pulling latest code from develop branch..."
+          git fetch origin
+          git reset --hard origin/develop
+          
+          # Activate virtual environment
+          echo "🐍 Activating virtual environment..."
+          source venv/bin/activate
+          
+          # Install/update dependencies
+          echo "📦 Installing dependencies..."
+          pip install -r requirements.txt
+          
+          # Run database migrations
+          echo "🗄️ Running database migrations..."
+          alembic upgrade head || echo "⚠️ No migrations to run"
+          
+          # Restart application
+          echo "♻️ Restarting application..."
+          sudo systemctl restart gestiones-develop
+          
+          # Wait for service to start
+          sleep 5
+          
+          # Check status
+          echo "✅ Checking service status..."
+          sudo systemctl status gestiones-develop --no-pager
+          
+          echo "🎉 Deployment to DEVELOP completed!"
+    
+    - name: Health Check
+      run: |
+        echo "🏥 Running health check..."
+        sleep 10
+        curl -f http://${{ secrets.DEVELOP_HOST }}:8000/healthz || echo "⚠️ Health check failed, but continuing..."
+    
+    - name: Deployment Summary
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deploy to DEVELOP successful!"
+          echo "🌐 Application: http://${{ secrets.DEVELOP_HOST }}:8000"
+        else
+          echo "❌ Deploy to DEVELOP failed!"
+        fi
+

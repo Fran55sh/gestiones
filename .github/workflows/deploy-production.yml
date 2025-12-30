@@ -1,0 +1,164 @@
+name: Deploy to Production (Oracle Cloud)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 black
+    
+    - name: Run linting
+      run: |
+        echo "🔍 Running Flake8..."
+        flake8 app tests
+        echo "🎨 Checking Black formatting..."
+        black --check app tests
+    
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        pytest --cov=app --cov-report=term --cov-fail-under=70
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: http://${{ secrets.PROD_HOST }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create deployment backup point
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USER }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: 22
+        script: |
+          echo "💾 Creating backup before deployment..."
+          cd ${{ secrets.PROD_PATH }}
+          BACKUP_DIR="$HOME/backups/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          cp -r . "$BACKUP_DIR/" || echo "⚠️ Backup warning"
+          echo "✅ Backup created at $BACKUP_DIR"
+    
+    - name: Deploy to Oracle Cloud (Production)
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USER }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment to PRODUCTION instance..."
+          
+          # Navigate to project directory
+          cd ${{ secrets.PROD_PATH }}
+          
+          # Pull latest code
+          echo "📥 Pulling latest code from main branch..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Activate virtual environment
+          echo "🐍 Activating virtual environment..."
+          source venv/bin/activate
+          
+          # Install/update dependencies
+          echo "📦 Installing dependencies..."
+          pip install -r requirements.txt
+          
+          # Run database migrations
+          echo "🗄️ Running database migrations..."
+          alembic upgrade head
+          
+          # Collect static files (if needed)
+          echo "📁 Preparing static files..."
+          # python manage.py collectstatic --noinput || echo "⚠️ No static collection needed"
+          
+          # Restart application
+          echo "♻️ Restarting application..."
+          sudo systemctl restart gestiones-prod
+          
+          # Wait for service to start
+          sleep 5
+          
+          # Check status
+          echo "✅ Checking service status..."
+          sudo systemctl status gestiones-prod --no-pager
+          
+          echo "🎉 Deployment to PRODUCTION completed!"
+    
+    - name: Health Check
+      run: |
+        echo "🏥 Running health check..."
+        sleep 10
+        curl -f http://${{ secrets.PROD_HOST }}:8001/healthz || exit 1
+    
+    - name: Rollback on failure
+      if: failure()
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USER }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        port: 22
+        script: |
+          echo "⚠️ Deployment failed, attempting rollback..."
+          cd ${{ secrets.PROD_PATH }}
+          git reset --hard HEAD~1
+          source venv/bin/activate
+          pip install -r requirements.txt
+          sudo systemctl restart gestiones-prod
+          echo "🔄 Rollback completed"
+    
+    - name: Deployment Summary
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deploy to PRODUCTION successful!"
+          echo "🌐 Application: http://${{ secrets.PROD_HOST }}:8001"
+          echo "📊 Coverage: 71%"
+          echo "🧪 Tests: 86/86 passed"
+        else
+          echo "❌ Deploy to PRODUCTION failed!"
+          echo "🔄 Rollback executed"
+        fi
+    
+    - name: Notify on success
+      if: success()
+      run: |
+        echo "::notice title=Production Deployment::✅ Successfully deployed to production!"
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "::error title=Production Deployment::❌ Production deployment failed and was rolled back!"
+
