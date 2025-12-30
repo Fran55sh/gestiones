@@ -8,11 +8,11 @@ Guía completa para configurar el deploy automático a las instancias de Oracle 
 GitHub Actions
     ↓
 ┌─────────────────────┐
-│   Push to develop   │ → Tests → Deploy → Oracle Cloud (Develop - :8000)
+│   Push to develop   │ → Tests → Deploy → Oracle Cloud (Develop - :5001)
 └─────────────────────┘
 
 ┌─────────────────────┐
-│   Push to main      │ → Tests → Deploy → Oracle Cloud (Prod - :8001)
+│   Push to main      │ → Tests → Deploy → Oracle Cloud (Prod - :5000)
 └─────────────────────┘
 ```
 
@@ -167,7 +167,7 @@ ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
     --workers 4 \
     --worker-class gthread \
     --threads 2 \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:5001 \
     --access-logfile /var/log/gestiones-develop-access.log \
     --error-logfile /var/log/gestiones-develop-error.log \
     --log-level info \
@@ -207,7 +207,7 @@ ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
     --workers 4 \
     --worker-class gthread \
     --threads 2 \
-    --bind 0.0.0.0:8001 \
+    --bind 0.0.0.0:5000 \
     --access-logfile /var/log/gestiones-prod-access.log \
     --error-logfile /var/log/gestiones-prod-error.log \
     --log-level warning \
@@ -288,7 +288,7 @@ server {
     server_name develop.tu-dominio.com;  # o la IP
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:5001;  # 5001 para DEVELOP, 5000 para PROD
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -342,7 +342,7 @@ sudo journalctl -u gestiones-develop -f
 1. `git push origin develop`
 2. GitHub Actions ejecuta tests
 3. Si pasan, deploy automático a instancia DEVELOP
-4. Aplicación disponible en `http://IP:8000`
+4. Aplicación disponible en `http://IP:5001`
 
 ### Para PRODUCTION
 1. Merge de `develop` a `main`
@@ -350,7 +350,7 @@ sudo journalctl -u gestiones-develop -f
 3. Si pasan, deploy automático a instancia PROD
 4. Se crea backup antes del deploy
 5. Si falla, rollback automático
-6. Aplicación disponible en `http://IP:8001`
+6. Aplicación disponible en `http://IP:5000`
 
 ## 🛠️ Comandos Útiles
 
@@ -425,7 +425,12 @@ psql "postgresql://usuario:password@localhost:5432/gestiones_dev"
 La aplicación expone `/healthz` para verificar estado:
 
 ```bash
-curl http://localhost:8000/healthz
+# Para DEVELOP
+curl http://localhost:5001/healthz
+# Respuesta: {"status": "healthy"}
+
+# Para PRODUCTION
+curl http://localhost:5000/healthz
 # Respuesta: {"status": "healthy"}
 ```
 

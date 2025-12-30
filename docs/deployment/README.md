@@ -18,7 +18,7 @@ Guía completa paso a paso para configurar el deploy automático a Oracle Cloud:
 ### Deploy to Develop
 - **Archivo**: `.github/workflows/deploy-develop.yml`
 - **Trigger**: Push a rama `develop`
-- **Target**: Oracle Cloud instancia DEVELOP (puerto 8000)
+- **Target**: Oracle Cloud instancia DEVELOP (puerto 5001)
 - **Features**:
   - Tests automáticos antes de deploy
   - Deploy automático si tests pasan
@@ -27,7 +27,7 @@ Guía completa paso a paso para configurar el deploy automático a Oracle Cloud:
 ### Deploy to Production
 - **Archivo**: `.github/workflows/deploy-production.yml`
 - **Trigger**: Push a rama `main`
-- **Target**: Oracle Cloud instancia PRODUCTION (puerto 8001)
+- **Target**: Oracle Cloud instancia PRODUCTION (puerto 5000)
 - **Features**:
   - Tests automáticos antes de deploy
   - Backup automático antes de deploy
@@ -146,7 +146,8 @@ sudo systemctl status gestiones-develop
 
 ### Health Check
 ```bash
-curl http://localhost:8000/healthz
+curl http://localhost:5001/healthz  # Para DEVELOP
+curl http://localhost:5000/healthz  # Para PRODUCTION
 ```
 
 ## 🔒 Seguridad
@@ -161,7 +162,7 @@ El script de setup configura automáticamente:
 ## 📝 Notas
 
 - Los workflows están configurados para usar `appleboy/ssh-action@v1.0.0`
-- El puerto 8000 es para DEVELOP, 8001 para PRODUCTION
+- El puerto 5001 es para DEVELOP, 5000 para PRODUCTION
 - Los backups se guardan en `$HOME/backups/` en producción
 - Los logs se guardan en `/var/log/gestiones-*`
 - Se usa Gunicorn con 4 workers y 2 threads por worker
