@@ -68,6 +68,12 @@ jobs:
             PROJECT_PATH="/home/ubuntu/gestiones"
           fi
           cd "$PROJECT_PATH"
+          
+          # Backup current Docker images
+          echo "📦 Backing up Docker images..."
+          docker save -o /tmp/gestiones-backup-$(date +%Y%m%d_%H%M%S).tar $(docker images -q gestiones_web 2>/dev/null | head -1) || echo "No images to backup"
+          
+          # Backup code
           BACKUP_DIR="$HOME/backups/$(date +%Y%m%d_%H%M%S)"
           mkdir -p "$BACKUP_DIR"
           cp -r . "$BACKUP_DIR/" || echo "⚠️ Backup warning"
@@ -95,32 +101,27 @@ jobs:
           git fetch origin
           git reset --hard origin/main
           
-          # Activate virtual environment
-          echo "🐍 Activating virtual environment..."
-          source venv/bin/activate
+          # Deploy with Docker Compose
+          echo "🐳 Stopping containers..."
+          docker-compose -f docker-compose.prod.yml down
           
-          # Install/update dependencies
-          echo "📦 Installing dependencies..."
-          pip install -r requirements.txt
+          echo "🔨 Building new images..."
+          docker-compose -f docker-compose.prod.yml build --no-cache
           
-          # Run database migrations
-          echo "🗄️ Running database migrations..."
-          alembic upgrade head
+          echo "🚀 Starting containers..."
+          docker-compose -f docker-compose.prod.yml up -d
           
-          # Collect static files (if needed)
-          echo "📁 Preparing static files..."
-          # python manage.py collectstatic --noinput || echo "⚠️ No static collection needed"
+          # Wait for container to be healthy
+          echo "⏳ Waiting for container to start..."
+          sleep 15
           
-          # Restart application
-          echo "♻️ Restarting application..."
-          sudo systemctl restart gestiones-prod
+          # Show container status
+          echo "📊 Container status:"
+          docker ps | grep gestiones || echo "Container not found"
           
-          # Wait for service to start
-          sleep 5
-          
-          # Check status
-          echo "✅ Checking service status..."
-          sudo systemctl status gestiones-prod --no-pager
+          # Show logs
+          echo "📝 Recent logs:"
+          docker-compose -f docker-compose.prod.yml logs --tail=20
           
           echo "🎉 Deployment to PRODUCTION completed!"
     
@@ -145,10 +146,16 @@ jobs:
             PROJECT_PATH="/home/ubuntu/gestiones"
           fi
           cd "$PROJECT_PATH"
+          
+          # Rollback code
+          echo "🔄 Rolling back code..."
           git reset --hard HEAD~1
-          source venv/bin/activate
-          pip install -r requirements.txt
-          sudo systemctl restart gestiones-prod
+          
+          # Rebuild and restart with previous version
+          echo "🐳 Rebuilding previous version..."
+          docker-compose -f docker-compose.prod.yml down
+          docker-compose -f docker-compose.prod.yml up -d --build
+          
           echo "🔄 Rollback completed"
     
     - name: Deployment Summary

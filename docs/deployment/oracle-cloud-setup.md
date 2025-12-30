@@ -1,6 +1,6 @@
-# 🚀 Deploy Automático a Oracle Cloud
+# 🚀 Deploy Automático a Oracle Cloud con Docker
 
-Guía completa para configurar el deploy automático a las instancias de Oracle Cloud.
+Guía completa para configurar el deploy automático a las instancias de Oracle Cloud usando Docker Compose.
 
 ## 📋 Arquitectura
 
@@ -8,13 +8,23 @@ Guía completa para configurar el deploy automático a las instancias de Oracle 
 GitHub Actions
     ↓
 ┌─────────────────────┐
-│   Push to develop   │ → Tests → Deploy → Oracle Cloud (Develop - :5001)
+│   Push to develop   │ → Tests → Build Docker → Deploy → Oracle Cloud (Develop - :5001)
 └─────────────────────┘
 
 ┌─────────────────────┐
-│   Push to main      │ → Tests → Deploy → Oracle Cloud (Prod - :5000)
+│   Push to main      │ → Tests → Backup → Build Docker → Deploy → Oracle Cloud (Prod - :5000)
 └─────────────────────┘
+                                    ↓ (si falla)
+                                Rollback 🔄
 ```
+
+## 🐳 Stack Tecnológico
+
+- **Containerización**: Docker + Docker Compose
+- **Web Server**: Gunicorn (dentro del container)
+- **CI/CD**: GitHub Actions
+- **Reverse Proxy**: Nginx (opcional)
+- **Portabilidad**: 100% - funciona en cualquier cloud provider
 
 ## 🔐 Paso 1: Configurar Secrets en GitHub
 
@@ -56,12 +66,29 @@ En **cada instancia**, ejecuta:
 # Actualizar sistema
 sudo apt update && sudo apt upgrade -y
 
-# Instalar dependencias
-sudo apt install -y python3.11 python3.11-venv python3-pip git nginx postgresql-client
+# Instalar Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Agregar usuario al grupo docker (para no usar sudo)
+sudo usermod -aG docker ubuntu
+
+# Instalar Docker Compose
+sudo apt install docker-compose -y
+
+# Instalar Git (si no está)
+sudo apt install git -y
+
+# Verificar instalación
+docker --version
+docker-compose --version
+
+# IMPORTANTE: Salir y volver a entrar para que el grupo docker tome efecto
+exit
+# (volver a conectar por SSH)
 
 # Crear directorio del proyecto (si no existe)
-sudo mkdir -p /home/ubuntu/gestiones
-sudo chown ubuntu:ubuntu /home/ubuntu/gestiones
+mkdir -p /home/ubuntu/gestiones
 ```
 
 ### 2.2 Clonar el Repositorio
@@ -78,209 +105,170 @@ git checkout develop
 git checkout main
 ```
 
-### 2.3 Configurar Virtual Environment
+### 2.3 Configurar Variables de Entorno
 
 ```bash
-cd /home/ubuntu/gestiones
-
-# Crear venv
-python3.11 -m venv venv
-
-# Activar
-source venv/bin/activate
-
-# Instalar dependencias
-pip install --upgrade pip
-pip install -r requirements.txt
+# Crear archivo .env para development
+nano /home/ubuntu/gestiones/.env.dev
 ```
 
-### 2.4 Configurar Variables de Entorno
-
-```bash
-# Crear archivo .env
-nano /home/ubuntu/gestiones/.env
-```
-
-Contenido del `.env`:
+Contenido del `.env.dev`:
 
 ```env
 # Flask
 SECRET_KEY=tu_secret_key_muy_seguro_aqui
-FLASK_ENV=development  # o production
+FLASK_ENV=development
+FLASK_DEBUG=1
 
-# Database
-DATABASE_URL=postgresql://usuario:password@localhost:5432/gestiones_dev
+# Database (SQLite para dev)
+DATABASE_URL=sqlite:///./data/gestiones.db
 
 # Redis (opcional)
 REDIS_URL=redis://localhost:6379/0
 
-# Email (si usas)
+# Email (opcional)
 MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USERNAME=tu@email.com
 MAIL_PASSWORD=tu_password_app
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
 
 # Application
 DEBUG=False
 TESTING=False
 ```
 
-### 2.5 Inicializar Base de Datos
+Para **producción**, crea `.env.prod`:
 
 ```bash
-# Crear base de datos PostgreSQL
-sudo -u postgres psql
-CREATE DATABASE gestiones_dev;  -- o gestiones_prod según la instancia
-CREATE USER gestor WITH PASSWORD 'password_seguro';
-GRANT ALL PRIVILEGES ON DATABASE gestiones_dev TO gestor;
-\q
+nano /home/ubuntu/gestiones/.env.prod
+```
 
-# Ejecutar migraciones
+```env
+# Flask
+SECRET_KEY=otro_secret_key_diferente_y_mas_seguro
+FLASK_ENV=production
+FLASK_DEBUG=0
+
+# Database (PostgreSQL para prod)
+DATABASE_URL=postgresql://usuario:password@localhost:5432/gestiones_prod
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Email
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=tu@email.com
+MAIL_PASSWORD=tu_password_app
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
+
+# Application
+DEBUG=False
+TESTING=False
+```
+
+### 2.4 Verificar Docker Compose Files
+
+Asegúrate de que los archivos `docker-compose.dev.yml` y `docker-compose.prod.yml` existan en el repositorio.
+
+**`docker-compose.dev.yml`** (ya debe estar en el repo):
+```yaml
+version: '3.8'
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:5001:5000"
+    env_file:
+      - .env.dev
+    volumes:
+      - ./:/app
+    restart: always
+```
+
+**`docker-compose.prod.yml`** (ya debe estar en el repo):
+```yaml
+version: '3.8'
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "127.0.0.1:5000:5000"
+    env_file:
+      - .env.prod
+    restart: always
+```
+
+### 2.5 Iniciar la Aplicación con Docker
+
+```bash
 cd /home/ubuntu/gestiones
-source venv/bin/activate
-alembic upgrade head
+
+# Para DEVELOPMENT
+docker-compose -f docker-compose.dev.yml up -d --build
+
+# Para PRODUCTION
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# Verificar que está corriendo
+docker ps
+
+# Ver logs
+docker-compose -f docker-compose.dev.yml logs -f
 ```
 
-## ⚙️ Paso 3: Configurar Systemd
+## ⚙️ Paso 3: Configurar Permisos (Opcional)
 
-### 3.1 Crear Servicio para DEVELOP
+Si necesitas que Docker arranque automáticamente al reiniciar el servidor, puedes agregar un servicio systemd simple:
 
 ```bash
-sudo nano /etc/systemd/system/gestiones-develop.service
+sudo nano /etc/systemd/system/gestiones-docker.service
 ```
-
-Contenido:
 
 ```ini
 [Unit]
-Description=Gestiones MVP - Development
-After=network.target postgresql.service
+Description=Gestiones Docker Container
+Requires=docker.service
+After=docker.service
 
 [Service]
-Type=notify
-User=ubuntu
-Group=ubuntu
+Type=oneshot
+RemainAfterExit=yes
 WorkingDirectory=/home/ubuntu/gestiones
-Environment="PATH=/home/ubuntu/gestiones/venv/bin"
-EnvironmentFile=/home/ubuntu/gestiones/.env
-ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
-    --workers 4 \
-    --worker-class gthread \
-    --threads 2 \
-    --bind 0.0.0.0:5001 \
-    --access-logfile /var/log/gestiones-develop-access.log \
-    --error-logfile /var/log/gestiones-develop-error.log \
-    --log-level info \
-    app.wsgi:app
-
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=gestiones-develop
+ExecStart=/usr/bin/docker-compose -f docker-compose.dev.yml up -d
+ExecStop=/usr/bin/docker-compose -f docker-compose.dev.yml down
+User=ubuntu
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### 3.2 Crear Servicio para PRODUCTION
-
 ```bash
-sudo nano /etc/systemd/system/gestiones-prod.service
+sudo systemctl enable gestiones-docker
 ```
 
-Contenido (similar a develop pero en puerto 8001):
+> **Nota**: Esto es opcional. Docker ya reinicia los containers automáticamente con `restart: always`.
 
-```ini
-[Unit]
-Description=Gestiones MVP - Production
-After=network.target postgresql.service
+## 🌐 Paso 4: Configurar Nginx (Opcional pero Recomendado)
 
-[Service]
-Type=notify
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/home/ubuntu/gestiones
-Environment="PATH=/home/ubuntu/gestiones/venv/bin"
-EnvironmentFile=/home/ubuntu/gestiones/.env
-ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
-    --workers 4 \
-    --worker-class gthread \
-    --threads 2 \
-    --bind 0.0.0.0:5000 \
-    --access-logfile /var/log/gestiones-prod-access.log \
-    --error-logfile /var/log/gestiones-prod-error.log \
-    --log-level warning \
-    app.wsgi:app
-
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=gestiones-prod
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3.3 Habilitar y Arrancar Servicios
-
-```bash
-# Recargar systemd
-sudo systemctl daemon-reload
-
-# Habilitar servicio (autostart en boot)
-sudo systemctl enable gestiones-develop  # o gestiones-prod
-
-# Iniciar servicio
-sudo systemctl start gestiones-develop
-
-# Verificar estado
-sudo systemctl status gestiones-develop
-
-# Ver logs en tiempo real
-sudo journalctl -u gestiones-develop -f
-```
-
-## 🔒 Paso 4: Configurar Permisos Sudo
-
-GitHub Actions necesita poder reiniciar el servicio sin password.
-
-```bash
-sudo visudo
-```
-
-Agregar al final:
-
-```
-# Para instancia DEVELOP
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart gestiones-develop
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl status gestiones-develop
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl stop gestiones-develop
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl start gestiones-develop
-
-# Para instancia PROD (en la otra instancia)
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart gestiones-prod
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl status gestiones-prod
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl stop gestiones-prod
-ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl start gestiones-prod
-```
-
-## 🌐 Paso 5: Configurar Nginx (Opcional pero Recomendado)
-
-### 5.1 Instalar Nginx
+### 4.1 Instalar Nginx
 
 ```bash
 sudo apt install nginx -y
 ```
 
-### 5.2 Configurar para DEVELOP
+### 4.2 Configurar Nginx como Reverse Proxy
 
 ```bash
-sudo nano /etc/nginx/sites-available/gestiones-develop
+sudo nano /etc/nginx/sites-available/gestiones
 ```
 
-Contenido:
+**Para instancia DEVELOP** (puerto 5001):
 
 ```nginx
 server {
@@ -288,52 +276,102 @@ server {
     server_name develop.tu-dominio.com;  # o la IP
 
     location / {
-        proxy_pass http://127.0.0.1:5001;  # 5001 para DEVELOP, 5000 para PROD
+        proxy_pass http://127.0.0.1:5001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
     }
 
     location /static {
         alias /home/ubuntu/gestiones/static;
         expires 30d;
+        add_header Cache-Control "public, immutable";
     }
 }
 ```
 
+**Para instancia PRODUCTION** (puerto 5000):
+
+```nginx
+server {
+    listen 80;
+    server_name tu-dominio.com;  # o la IP
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    location /static {
+        alias /home/ubuntu/gestiones/static;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+Habilitar el sitio:
+
 ```bash
 # Habilitar sitio
-sudo ln -s /etc/nginx/sites-available/gestiones-develop /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/gestiones /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-### 5.3 Configurar SSL con Let's Encrypt (Recomendado)
+### 4.3 Configurar SSL con Let's Encrypt (Recomendado)
 
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d develop.tu-dominio.com
+sudo certbot --nginx -d tu-dominio.com
 ```
 
-## 🧪 Paso 6: Probar el Deploy
+## 🧪 Paso 5: Probar el Deploy
 
-### 6.1 Deploy Manual (Primera vez)
+### 5.1 Arrancar Docker Localmente (Primera vez)
+
+```bash
+# En la instancia de Oracle Cloud
+cd /home/ubuntu/gestiones
+
+# Para DEVELOP
+docker-compose -f docker-compose.dev.yml up -d --build
+
+# Verificar que arrancó
+docker ps
+docker-compose -f docker-compose.dev.yml logs -f
+```
+
+### 5.2 Deploy Automático desde GitHub
 
 ```bash
 # En tu máquina local
 git add .
-git commit -m "test: Configurar deploy automático"
+git commit -m "test: Configurar deploy automático con Docker"
 git push origin develop
 ```
 
 Ve a GitHub → Actions → Verás el workflow ejecutándose
 
-### 6.2 Verificar Logs
+### 5.3 Verificar Logs
 
 ```bash
 # En la instancia de Oracle Cloud
-sudo journalctl -u gestiones-develop -f
+cd /home/ubuntu/gestiones
+
+# Ver logs en tiempo real
+docker-compose -f docker-compose.dev.yml logs -f
+
+# Ver solo los últimos 50 logs
+docker-compose -f docker-compose.dev.yml logs --tail=50
 ```
 
 ## 🔄 Flujo de Deploy
@@ -354,68 +392,152 @@ sudo journalctl -u gestiones-develop -f
 
 ## 🛠️ Comandos Útiles
 
+### Docker
+
 ```bash
-# Ver estado del servicio
-sudo systemctl status gestiones-develop
+# Ver contenedores corriendo
+docker ps
 
-# Ver logs
-sudo journalctl -u gestiones-develop -n 100
+# Ver todos los contenedores (incluyendo detenidos)
+docker ps -a
 
-# Reiniciar manualmente
-sudo systemctl restart gestiones-develop
+# Ver logs en tiempo real
+docker-compose -f docker-compose.dev.yml logs -f
 
-# Detener servicio
-sudo systemctl stop gestiones-develop
+# Ver logs de un servicio específico
+docker-compose -f docker-compose.dev.yml logs -f web
 
-# Ver logs de error
-sudo tail -f /var/log/gestiones-develop-error.log
+# Reiniciar contenedores
+docker-compose -f docker-compose.dev.yml restart
 
-# Ver logs de acceso
-sudo tail -f /var/log/gestiones-develop-access.log
+# Detener contenedores
+docker-compose -f docker-compose.dev.yml down
 
+# Iniciar contenedores
+docker-compose -f docker-compose.dev.yml up -d
+
+# Rebuilar y reiniciar
+docker-compose -f docker-compose.dev.yml up -d --build
+
+# Entrar al contenedor (para debug)
+docker-compose -f docker-compose.dev.yml exec web bash
+
+# Ver estadísticas de uso de recursos
+docker stats
+
+# Limpiar imágenes no usadas
+docker system prune -a
+
+# Ver imágenes Docker
+docker images
+```
+
+### Nginx
+
+```bash
 # Verificar configuración de Nginx
 sudo nginx -t
 
 # Recargar Nginx
 sudo systemctl reload nginx
 
-# Ver procesos de Gunicorn
-ps aux | grep gunicorn
+# Reiniciar Nginx
+sudo systemctl restart nginx
+
+# Ver logs de Nginx
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+```
+
+### Sistema
+
+```bash
+# Ver puertos en uso
+sudo ss -tlnp | grep -E "5000|5001"
+
+# Ver uso de disco
+df -h
+
+# Ver uso de memoria
+free -h
 ```
 
 ## 🔍 Troubleshooting
 
-### El servicio no arranca
+### Los contenedores no arrancan
 
 ```bash
 # Ver logs detallados
-sudo journalctl -u gestiones-develop -xe
+docker-compose -f docker-compose.dev.yml logs
 
-# Verificar permisos
-ls -la /home/ubuntu/gestiones-develop
+# Ver estado de contenedores
+docker ps -a
 
-# Verificar variables de entorno
-sudo systemctl show gestiones-develop --property=Environment
+# Verificar imágenes
+docker images
+
+# Rebuild desde cero
+docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker-compose.dev.yml build --no-cache
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+### Puerto en uso
+
+```bash
+# Ver qué está usando el puerto
+sudo ss -tlnp | grep 5001
+
+# Si es otro contenedor Docker
+docker ps
+docker stop <container_id>
+
+# Si es un proceso del sistema
+sudo kill -9 <pid>
 ```
 
 ### El deploy falla en GitHub Actions
 
-1. Verificar que los secrets están configurados correctamente
-2. Verificar que la clave SSH funciona:
+1. **Verificar secrets en GitHub**
+   - `DEVELOP_HOST`, `DEVELOP_USER`, `DEVELOP_SSH_KEY`
+   
+2. **Verificar SSH funciona**:
    ```bash
    ssh -i tu_clave.pem ubuntu@IP
    ```
-3. Verificar permisos sudo (paso 4)
 
-### Base de datos no conecta
+3. **Verificar que Docker está instalado en el servidor**:
+   ```bash
+   docker --version
+   docker-compose --version
+   ```
+
+4. **Ver logs del workflow en GitHub Actions**
+
+### Contenedor se reinicia constantemente
 
 ```bash
-# Verificar PostgreSQL
-sudo systemctl status postgresql
-sudo -u postgres psql -l
+# Ver por qué falla
+docker-compose -f docker-compose.dev.yml logs --tail=100
 
-# Probar conexión
-psql "postgresql://usuario:password@localhost:5432/gestiones_dev"
+# Verificar archivo .env existe
+ls -la /home/ubuntu/gestiones/.env.dev
+
+# Verificar variables de entorno
+docker-compose -f docker-compose.dev.yml config
+```
+
+### Error "No space left on device"
+
+```bash
+# Limpiar imágenes y contenedores viejos
+docker system prune -a -f
+
+# Ver uso de disco
+df -h
+
+# Ver espacio usado por Docker
+docker system df
 ```
 
 ## 📊 Monitoreo

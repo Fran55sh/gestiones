@@ -1,17 +1,17 @@
 # 📦 Deployment Documentation
 
-Esta carpeta contiene toda la documentación relacionada con el deployment de la aplicación.
+Esta carpeta contiene toda la documentación relacionada con el deployment de la aplicación usando **Docker**.
 
 ## 📑 Archivos
 
 ### `oracle-cloud-setup.md`
-Guía completa paso a paso para configurar el deploy automático a Oracle Cloud:
+Guía completa paso a paso para configurar el deploy automático a Oracle Cloud con Docker:
 - Configuración de secrets en GitHub
 - Setup de instancias DEVELOP y PRODUCTION
-- Configuración de systemd services
+- Instalación y configuración de Docker + Docker Compose
 - Setup de Nginx como reverse proxy
 - Configuración de SSL con Let's Encrypt
-- Troubleshooting y comandos útiles
+- Troubleshooting y comandos útiles Docker
 
 ## 🚀 Workflows Disponibles
 

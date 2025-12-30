@@ -76,28 +76,27 @@ jobs:
           git fetch origin
           git reset --hard origin/develop
           
-          # Activate virtual environment
-          echo "🐍 Activating virtual environment..."
-          source venv/bin/activate
+          # Deploy with Docker Compose
+          echo "🐳 Stopping containers..."
+          docker-compose -f docker-compose.dev.yml down
           
-          # Install/update dependencies
-          echo "📦 Installing dependencies..."
-          pip install -r requirements.txt
+          echo "🔨 Building new images..."
+          docker-compose -f docker-compose.dev.yml build --no-cache
           
-          # Run database migrations
-          echo "🗄️ Running database migrations..."
-          alembic upgrade head || echo "⚠️ No migrations to run"
+          echo "🚀 Starting containers..."
+          docker-compose -f docker-compose.dev.yml up -d
           
-          # Restart application
-          echo "♻️ Restarting application..."
-          sudo systemctl restart gestiones-develop
+          # Wait for container to be healthy
+          echo "⏳ Waiting for container to start..."
+          sleep 15
           
-          # Wait for service to start
-          sleep 5
+          # Show container status
+          echo "📊 Container status:"
+          docker ps | grep gestiones || echo "Container not found"
           
-          # Check status
-          echo "✅ Checking service status..."
-          sudo systemctl status gestiones-develop --no-pager
+          # Show logs
+          echo "📝 Recent logs:"
+          docker-compose -f docker-compose.dev.yml logs --tail=20
           
           echo "🎉 Deployment to DEVELOP completed!"
     
