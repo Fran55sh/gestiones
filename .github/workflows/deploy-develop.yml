@@ -56,9 +56,9 @@ jobs:
     - name: Deploy to Oracle Cloud (Develop)
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.DEVELOP_HOST }}
-        username: ${{ secrets.DEVELOP_USER }}
-        key: ${{ secrets.DEVELOP_SSH_KEY }}
+        host: ${{ secrets.SSH_HOST_DEV }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_DEV }}
         port: 22
         script: |
           echo "🚀 Starting deployment to DEVELOP instance..."
@@ -103,14 +103,14 @@ jobs:
       run: |
         echo "🏥 Running health check..."
         sleep 10
-        curl -f http://${{ secrets.DEVELOP_HOST }}:5001/healthz || echo "⚠️ Health check failed, but continuing..."
+        curl -f http://${{ secrets.SSH_HOST_DEV }}:5001/healthz || echo "⚠️ Health check failed, but continuing..."
     
     - name: Deployment Summary
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "✅ Deploy to DEVELOP successful!"
-          echo "🌐 Application: http://${{ secrets.DEVELOP_HOST }}:5001"
+          echo "🌐 Application: http://${{ secrets.SSH_HOST_DEV }}:5001"
         else
           echo "❌ Deploy to DEVELOP failed!"
         fi

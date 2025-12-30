@@ -56,9 +56,9 @@ jobs:
     - name: Create deployment backup point
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.PROD_HOST }}
-        username: ${{ secrets.PROD_USER }}
-        key: ${{ secrets.PROD_SSH_KEY }}
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
         port: 22
         script: |
           echo "💾 Creating backup before deployment..."
@@ -81,9 +81,9 @@ jobs:
     - name: Deploy to Oracle Cloud (Production)
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.PROD_HOST }}
-        username: ${{ secrets.PROD_USER }}
-        key: ${{ secrets.PROD_SSH_KEY }}
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
         port: 22
         script: |
           echo "🚀 Starting deployment to PRODUCTION instance..."
@@ -128,15 +128,15 @@ jobs:
       run: |
         echo "🏥 Running health check..."
         sleep 10
-        curl -f http://${{ secrets.PROD_HOST }}:5000/healthz || exit 1
+        curl -f http://${{ secrets.SSH_HOST_PROD }}:5000/healthz || exit 1
     
     - name: Rollback on failure
       if: failure()
       uses: appleboy/ssh-action@v1.0.0
       with:
-        host: ${{ secrets.PROD_HOST }}
-        username: ${{ secrets.PROD_USER }}
-        key: ${{ secrets.PROD_SSH_KEY }}
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
         port: 22
         script: |
           echo "⚠️ Deployment failed, attempting rollback..."
@@ -162,7 +162,7 @@ jobs:
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "✅ Deploy to PRODUCTION successful!"
-          echo "🌐 Application: http://${{ secrets.PROD_HOST }}:5000"
+          echo "🌐 Application: http://${{ secrets.SSH_HOST_PROD }}:5000"
           echo "📊 Coverage: 71%"
           echo "🧪 Tests: 86/86 passed"
         else
