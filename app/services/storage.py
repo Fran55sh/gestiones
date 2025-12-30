@@ -5,8 +5,8 @@ from datetime import datetime
 from flask import current_app
 import logging
 
-from ..db import db
-from ..models import ContactSubmission
+from ..core.database import db
+from ..features.contact.models import ContactSubmission
 from ..utils.validators import sanitize_input
 from ..utils.exceptions import StorageError
 
