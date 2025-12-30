@@ -39,12 +39,12 @@ fi
 
 # Configuración según ambiente
 if [ "$ENVIRONMENT" == "develop" ]; then
-    PROJECT_DIR="/home/ubuntu/gestiones-develop"
+    PROJECT_DIR="/home/ubuntu/gestiones"
     SERVICE_NAME="gestiones-develop"
     PORT="8000"
     BRANCH="develop"
 else
-    PROJECT_DIR="/home/ubuntu/gestiones-prod"
+    PROJECT_DIR="/home/ubuntu/gestiones"
     SERVICE_NAME="gestiones-prod"
     PORT="8001"
     BRANCH="main"

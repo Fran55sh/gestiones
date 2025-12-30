@@ -27,7 +27,7 @@ Ve a tu repositorio → **Settings** → **Secrets and variables** → **Actions
 | `DEVELOP_HOST` | IP o dominio de la instancia | `123.45.67.89` |
 | `DEVELOP_USER` | Usuario SSH | `ubuntu` |
 | `DEVELOP_SSH_KEY` | Clave privada SSH completa | `-----BEGIN RSA PRIVATE KEY-----...` |
-| `DEVELOP_PATH` | Ruta del proyecto | `/home/ubuntu/gestiones-develop` |
+| `DEVELOP_PATH` | Ruta del proyecto (opcional) | `/home/ubuntu/gestiones` (default si no se especifica) |
 
 ### Secrets para Instancia PRODUCTION
 
@@ -36,7 +36,7 @@ Ve a tu repositorio → **Settings** → **Secrets and variables** → **Actions
 | `PROD_HOST` | IP o dominio de la instancia | `98.76.54.32` |
 | `PROD_USER` | Usuario SSH | `ubuntu` |
 | `PROD_SSH_KEY` | Clave privada SSH completa | `-----BEGIN RSA PRIVATE KEY-----...` |
-| `PROD_PATH` | Ruta del proyecto | `/home/ubuntu/gestiones-prod` |
+| `PROD_PATH` | Ruta del proyecto (opcional) | `/home/ubuntu/gestiones` (default si no se especifica) |
 
 ### Secrets Compartidos
 
@@ -59,29 +59,29 @@ sudo apt update && sudo apt upgrade -y
 # Instalar dependencias
 sudo apt install -y python3.11 python3.11-venv python3-pip git nginx postgresql-client
 
-# Crear directorio del proyecto
-sudo mkdir -p /home/ubuntu/gestiones-develop  # o gestiones-prod
-sudo chown ubuntu:ubuntu /home/ubuntu/gestiones-develop
+# Crear directorio del proyecto (si no existe)
+sudo mkdir -p /home/ubuntu/gestiones
+sudo chown ubuntu:ubuntu /home/ubuntu/gestiones
 ```
 
 ### 2.2 Clonar el Repositorio
 
 ```bash
 cd /home/ubuntu
-git clone https://github.com/tu-usuario/gestiones.git gestiones-develop
-cd gestiones-develop
+git clone https://github.com/tu-usuario/gestiones.git gestiones
+cd gestiones
 
-# Para develop
+# Para instancia develop
 git checkout develop
 
-# Para prod (en la otra instancia)
+# Para instancia prod (en la otra instancia)
 git checkout main
 ```
 
 ### 2.3 Configurar Virtual Environment
 
 ```bash
-cd /home/ubuntu/gestiones-develop  # o gestiones-prod
+cd /home/ubuntu/gestiones
 
 # Crear venv
 python3.11 -m venv venv
@@ -98,7 +98,7 @@ pip install -r requirements.txt
 
 ```bash
 # Crear archivo .env
-nano /home/ubuntu/gestiones-develop/.env
+nano /home/ubuntu/gestiones/.env
 ```
 
 Contenido del `.env`:
@@ -130,13 +130,13 @@ TESTING=False
 ```bash
 # Crear base de datos PostgreSQL
 sudo -u postgres psql
-CREATE DATABASE gestiones_dev;  -- o gestiones_prod
+CREATE DATABASE gestiones_dev;  -- o gestiones_prod según la instancia
 CREATE USER gestor WITH PASSWORD 'password_seguro';
 GRANT ALL PRIVILEGES ON DATABASE gestiones_dev TO gestor;
 \q
 
 # Ejecutar migraciones
-cd /home/ubuntu/gestiones-develop
+cd /home/ubuntu/gestiones
 source venv/bin/activate
 alembic upgrade head
 ```
@@ -160,10 +160,10 @@ After=network.target postgresql.service
 Type=notify
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/gestiones-develop
-Environment="PATH=/home/ubuntu/gestiones-develop/venv/bin"
-EnvironmentFile=/home/ubuntu/gestiones-develop/.env
-ExecStart=/home/ubuntu/gestiones-develop/venv/bin/gunicorn \
+WorkingDirectory=/home/ubuntu/gestiones
+Environment="PATH=/home/ubuntu/gestiones/venv/bin"
+EnvironmentFile=/home/ubuntu/gestiones/.env
+ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
     --workers 4 \
     --worker-class gthread \
     --threads 2 \
@@ -200,10 +200,10 @@ After=network.target postgresql.service
 Type=notify
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/gestiones-prod
-Environment="PATH=/home/ubuntu/gestiones-prod/venv/bin"
-EnvironmentFile=/home/ubuntu/gestiones-prod/.env
-ExecStart=/home/ubuntu/gestiones-prod/venv/bin/gunicorn \
+WorkingDirectory=/home/ubuntu/gestiones
+Environment="PATH=/home/ubuntu/gestiones/venv/bin"
+EnvironmentFile=/home/ubuntu/gestiones/.env
+ExecStart=/home/ubuntu/gestiones/venv/bin/gunicorn \
     --workers 4 \
     --worker-class gthread \
     --threads 2 \
@@ -296,7 +296,7 @@ server {
     }
 
     location /static {
-        alias /home/ubuntu/gestiones-develop/static;
+        alias /home/ubuntu/gestiones/static;
         expires 30d;
     }
 }

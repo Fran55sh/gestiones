@@ -64,8 +64,12 @@ jobs:
         script: |
           echo "🚀 Starting deployment to DEVELOP instance..."
           
-          # Navigate to project directory
-          cd ${{ secrets.DEVELOP_PATH }}
+          # Navigate to project directory (usar variable o default)
+          PROJECT_PATH="${{ secrets.DEVELOP_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
           
           # Pull latest code
           echo "📥 Pulling latest code from develop branch..."

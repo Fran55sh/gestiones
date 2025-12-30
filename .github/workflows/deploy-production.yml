@@ -63,7 +63,11 @@ jobs:
         port: 22
         script: |
           echo "💾 Creating backup before deployment..."
-          cd ${{ secrets.PROD_PATH }}
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
           BACKUP_DIR="$HOME/backups/$(date +%Y%m%d_%H%M%S)"
           mkdir -p "$BACKUP_DIR"
           cp -r . "$BACKUP_DIR/" || echo "⚠️ Backup warning"
@@ -79,8 +83,12 @@ jobs:
         script: |
           echo "🚀 Starting deployment to PRODUCTION instance..."
           
-          # Navigate to project directory
-          cd ${{ secrets.PROD_PATH }}
+          # Navigate to project directory (usar variable o default)
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
           
           # Pull latest code
           echo "📥 Pulling latest code from main branch..."
@@ -132,7 +140,11 @@ jobs:
         port: 22
         script: |
           echo "⚠️ Deployment failed, attempting rollback..."
-          cd ${{ secrets.PROD_PATH }}
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
           git reset --hard HEAD~1
           source venv/bin/activate
           pip install -r requirements.txt

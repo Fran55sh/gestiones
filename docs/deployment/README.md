@@ -65,8 +65,9 @@ sudo ./scripts/setup/setup-oracle-cloud.sh production
 Ve a tu repo → Settings → Secrets → Actions → New secret
 
 Necesitas configurar:
-- `DEVELOP_HOST`, `DEVELOP_USER`, `DEVELOP_SSH_KEY`, `DEVELOP_PATH`
-- `PROD_HOST`, `PROD_USER`, `PROD_SSH_KEY`, `PROD_PATH`
+- `DEVELOP_HOST`, `DEVELOP_USER`, `DEVELOP_SSH_KEY`
+- `PROD_HOST`, `PROD_USER`, `PROD_SSH_KEY`
+- `DEVELOP_PATH` y `PROD_PATH` son opcionales (default: `/home/ubuntu/gestiones`)
 
 Ver detalles en `oracle-cloud-setup.md`
 
@@ -99,7 +100,7 @@ GRANT ALL PRIVILEGES ON DATABASE gestiones_develop TO gestor;
 ### 4. Editar .env
 
 ```bash
-nano /home/ubuntu/gestiones-develop/.env
+nano /home/ubuntu/gestiones/.env
 ```
 
 Actualiza `DATABASE_URL` y otras variables necesarias.
@@ -107,7 +108,7 @@ Actualiza `DATABASE_URL` y otras variables necesarias.
 ### 5. Ejecutar Migraciones
 
 ```bash
-cd /home/ubuntu/gestiones-develop
+cd /home/ubuntu/gestiones
 source venv/bin/activate
 alembic upgrade head
 ```
@@ -115,7 +116,7 @@ alembic upgrade head
 ### 6. Reiniciar Servicio
 
 ```bash
-sudo systemctl restart gestiones-develop
+sudo systemctl restart gestiones-develop  # o gestiones-prod según la instancia
 ```
 
 ### 7. ¡Deploy Automático Listo!
