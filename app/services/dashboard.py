@@ -7,9 +7,12 @@ from typing import Dict, List, Optional
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import joinedload
 
-from ..db import db
-from ..models import Case, Promise, Activity, User
-from ..utils.cache import cache_result
+from ..core.database import db
+from ..features.cases.models import Case
+from ..features.cases.promise import Promise
+from ..features.activities.models import Activity
+from ..features.users.models import User
+from .cache import cache_result
 
 
 @cache_result(timeout=300, key_prefix='kpis')

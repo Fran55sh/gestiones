@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify, current_app
 import logging
 
-from ..db import db
-from ..models import ContactSubmission
+from ..core.database import db
+from ..features.contact.models import ContactSubmission
 from ..utils.security import require_role
 from ..utils.exceptions import NotFoundError, StorageError
 
