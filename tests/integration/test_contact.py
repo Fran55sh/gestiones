@@ -35,25 +35,20 @@ def test_contact_form_success(client, sample_submission):
 
 
 def test_contact_form_saves_to_file(client, sample_submission, app):
-    """Test que el formulario guarda datos en archivo."""
+    """Test que el formulario guarda datos en la base de datos."""
     # Enviar formulario
     response = client.post("/api/contact", data=sample_submission)
     assert response.status_code == 200
 
-    # Verificar que el archivo existe
-    import os
+    # Verificar que se guardó en la base de datos
+    with app.app_context():
+        from app.core.database import db
+        from app.features.contact.models import ContactSubmission
 
-    file_path = app.config.get("CONTACT_SUBMISSIONS_FILE")
-    assert file_path is not None
-    assert os.path.exists(file_path)
-
-    # Verificar contenido
-    with open(file_path, "r", encoding="utf-8") as f:
-        submissions = json.load(f)
-
-    assert len(submissions) > 0
-    assert submissions[-1]["entity"] == sample_submission["entity"]
-    assert submissions[-1]["email"] == sample_submission["email"]
+        submissions = ContactSubmission.query.all()
+        assert len(submissions) > 0
+        assert submissions[-1].entity == sample_submission["entity"]
+        assert submissions[-1].email == sample_submission["email"]
 
 
 def test_contact_form_sanitizes_input(client, app):

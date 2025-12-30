@@ -114,9 +114,11 @@ class TestErrorHandlersInApp:
     def test_storage_error_handling(self, app):
         """Test que StorageError se propaga correctamente."""
         from app.services.storage import save_submission_to_file
+        from app.core.database import db
 
         with app.app_context():
-            app.config["CONTACT_SUBMISSIONS_FILE"] = None
+            # Forzar un error cerrando la sesión de base de datos
+            db.session.close()
 
             with pytest.raises(StorageError):
                 save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")

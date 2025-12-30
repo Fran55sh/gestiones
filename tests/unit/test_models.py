@@ -13,11 +13,12 @@ from app.models import User, Case, Promise, Activity, ContactSubmission
 @pytest.fixture
 def sample_user(app):
     """Crea un usuario de prueba."""
-    user = User(username="testuser", role="gestor", active=True)
-    user.set_password("testpass123")
-    db.session.add(user)
-    db.session.commit()
-    return user
+    with app.app_context():
+        user = User(username="testuser", role="gestor", active=True)
+        user.set_password("testpass123")
+        db.session.add(user)
+        db.session.commit()
+        return user
 
 
 @pytest.fixture

@@ -17,103 +17,71 @@ from app.utils.exceptions import StorageError, EmailError, ConfigurationError
 class TestStorageService:
     """Tests para el servicio de almacenamiento."""
 
-    def test_save_submission_creates_file(self, app):
-        """Test que crea el archivo si no existe."""
+    def test_save_submission_creates_record(self, app):
+        """Test que crea un registro en la base de datos."""
         with app.app_context():
-            # Usar archivo temporal
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-                temp_path = f.name
+            from app.core.database import db
+            from app.features.contact.models import ContactSubmission
 
-            try:
-                app.config["CONTACT_SUBMISSIONS_FILE"] = temp_path
+            result = save_submission_to_file("Test Entity", "Test Name", "test@example.com", "1234567890", "Test message")
 
-                save_submission_to_file("Test Entity", "Test Name", "test@example.com", "1234567890", "Test message")
+            assert result is True
 
-                assert os.path.exists(temp_path)
-
-                with open(temp_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                assert isinstance(data, list)
-                assert len(data) == 1
-                assert data[0]["entity"] == "Test Entity"
-                assert data[0]["email"] == "test@example.com"
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+            # Verificar que se guardó en la base de datos
+            submissions = ContactSubmission.query.all()
+            assert len(submissions) == 1
+            assert submissions[0].entity == "Test Entity"
+            assert submissions[0].email == "test@example.com"
 
     def test_save_submission_appends_to_existing(self, app):
-        """Test que agrega a archivo existente."""
+        """Test que agrega a registros existentes."""
         with app.app_context():
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-                temp_path = f.name
-                json.dump([{"entity": "Existing"}], f)
+            from app.core.database import db
+            from app.features.contact.models import ContactSubmission
 
-            try:
-                app.config["CONTACT_SUBMISSIONS_FILE"] = temp_path
+            # Crear un registro existente
+            existing = ContactSubmission(entity="Existing", name="Old", email="old@test.com", phone="111", message="Old")
+            db.session.add(existing)
+            db.session.commit()
 
-                save_submission_to_file("New Entity", "New Name", "new@example.com", "0987654321", "New message")
+            # Guardar un nuevo registro
+            save_submission_to_file("New Entity", "New Name", "new@example.com", "0987654321", "New message")
 
-                with open(temp_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                assert len(data) == 2
-                assert data[0]["entity"] == "Existing"
-                assert data[1]["entity"] == "New Entity"
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+            # Verificar que hay 2 registros
+            submissions = ContactSubmission.query.all()
+            assert len(submissions) == 2
+            assert submissions[0].entity == "Existing"
+            assert submissions[1].entity == "New Entity"
 
     def test_save_submission_missing_config(self, app):
-        """Test error cuando falta configuración."""
+        """Test que el servicio funciona sin configuración de archivo."""
         with app.app_context():
-            app.config["CONTACT_SUBMISSIONS_FILE"] = None
-
-            with pytest.raises(StorageError) as exc_info:
-                save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")
-
-            assert "CONTACT_SUBMISSIONS_FILE" in str(exc_info.value)
+            # El servicio ahora usa la base de datos, no necesita configuración de archivo
+            result = save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")
+            assert result is True
 
     def test_save_submission_sanitizes_input(self, app):
         """Test que sanitiza la entrada."""
         with app.app_context():
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-                temp_path = f.name
+            from app.features.contact.models import ContactSubmission
 
-            try:
-                app.config["CONTACT_SUBMISSIONS_FILE"] = temp_path
+            save_submission_to_file("  Entity with spaces  ", "Name", "test@example.com", "123", "Message")
 
-                save_submission_to_file("  Entity with spaces  ", "Name", "test@example.com", "123", "Message")
+            submissions = ContactSubmission.query.all()
+            assert len(submissions) == 1
+            assert submissions[0].entity == "Entity with spaces"
 
-                with open(temp_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                assert data[0]["entity"] == "Entity with spaces"
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-    def test_save_submission_handles_corrupt_json(self, app):
-        """Test que maneja JSON corrupto."""
+    def test_save_submission_handles_database_errors(self, app):
+        """Test que maneja errores de base de datos."""
         with app.app_context():
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
-                temp_path = f.name
-                f.write("invalid json content")
+            from app.core.database import db
 
-            try:
-                app.config["CONTACT_SUBMISSIONS_FILE"] = temp_path
+            # Forzar un error cerrando la sesión
+            db.session.close()
 
-                # Debe inicializar nueva lista si el JSON está corrupto
+            # El servicio debería lanzar StorageError
+            with pytest.raises(StorageError):
                 save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")
-
-                with open(temp_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                assert isinstance(data, list)
-                assert len(data) == 1
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
 
 
 class TestEmailService:

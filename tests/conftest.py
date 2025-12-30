@@ -6,8 +6,11 @@ import os
 import tempfile
 import pytest
 from pathlib import Path
+from werkzeug.security import generate_password_hash
 
 from app import create_app
+from app.core.database import db
+from app.models import User
 
 
 @pytest.fixture
@@ -30,8 +33,23 @@ def app():
     app = create_app()
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False  # Deshabilitar CSRF en tests
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"  # Base de datos en memoria para tests
 
-    yield app
+    with app.app_context():
+        # Crear todas las tablas
+        db.create_all()
+
+        # Crear usuarios de prueba para autenticación
+        admin_user = User(username="admin", password_hash=generate_password_hash("admin123"), role="admin")
+        gestor_user = User(username="gestor", password_hash=generate_password_hash("gestor123"), role="gestor")
+        db.session.add_all([admin_user, gestor_user])
+        db.session.commit()
+
+        yield app
+
+        # Limpiar la base de datos después de los tests
+        db.session.remove()
+        db.drop_all()
 
     # Limpiar después de los tests
     if os.path.exists(test_submissions_file):

@@ -21,42 +21,40 @@ from app.services.dashboard_service import (
 @pytest.fixture
 def sample_data(app):
     """Crea datos de muestra para tests."""
-    # Crear gestor
-    gestor = User(username="gestor_test", role="gestor", active=True)
-    gestor.set_password("test123")
-    db.session.add(gestor)
-    db.session.commit()
+    with app.app_context():
+        # Usar el gestor ya creado en conftest
+        gestor = User.query.filter_by(username="gestor").first()
 
-    # Crear casos
-    case1 = Case(
-        entity="Entity 1",
-        debtor_name="Debtor 1",
-        amount=Decimal("10000.00"),
-        status="pagada",
-        cartera="Cartera A",
-        assigned_to_id=gestor.id,
-    )
-    case2 = Case(
-        entity="Entity 2",
-        debtor_name="Debtor 2",
-        amount=Decimal("5000.00"),
-        status="en_gestion",
-        cartera="Cartera B",
-        assigned_to_id=gestor.id,
-    )
-    db.session.add_all([case1, case2])
-    db.session.commit()
+        # Crear casos
+        case1 = Case(
+            entity="Entity 1",
+            debtor_name="Debtor 1",
+            amount=Decimal("10000.00"),
+            status="pagada",
+            cartera="Cartera A",
+            assigned_to_id=gestor.id,
+        )
+        case2 = Case(
+            entity="Entity 2",
+            debtor_name="Debtor 2",
+            amount=Decimal("5000.00"),
+            status="en_gestion",
+            cartera="Cartera B",
+            assigned_to_id=gestor.id,
+        )
+        db.session.add_all([case1, case2])
+        db.session.commit()
 
-    # Crear promesa
-    promise = Promise(case_id=case1.id, amount=Decimal("5000.00"), promise_date=datetime.now().date(), status="fulfilled")
-    db.session.add(promise)
+        # Crear promesa
+        promise = Promise(case_id=case1.id, amount=Decimal("5000.00"), promise_date=datetime.now().date(), status="fulfilled")
+        db.session.add(promise)
 
-    # Crear actividad
-    activity = Activity(case_id=case1.id, type="call", notes="Test call", created_by_id=gestor.id)
-    db.session.add(activity)
-    db.session.commit()
+        # Crear actividad
+        activity = Activity(case_id=case1.id, type="call", notes="Test call", created_by_id=gestor.id)
+        db.session.add(activity)
+        db.session.commit()
 
-    return {"gestor": gestor, "case1": case1, "case2": case2, "promise": promise, "activity": activity}
+        return {"gestor": gestor, "case1": case1, "case2": case2, "promise": promise, "activity": activity}
 
 
 def test_get_kpis(app, sample_data):
