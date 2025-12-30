@@ -1,6 +1,7 @@
 """
 Application factory for Gestiones MVP (Flask).
 """
+
 import os
 import json
 import logging
@@ -78,17 +79,17 @@ def create_app() -> Flask:
         data_dir = project_root / "data"
         data_dir.mkdir(exist_ok=True)
         database_url = f"sqlite:///{data_dir / 'gestiones.db'}"
-    
+
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SQLALCHEMY_ECHO"] = _env_bool("SQLALCHEMY_ECHO", False)
-    
+
     # Initialize database
     db.init_app(app)
-    
+
     # Compression
     Compress(app)
-    
+
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
@@ -122,21 +123,22 @@ def create_app() -> Flask:
     if enable_csrf:
         try:
             from flask_seasurf import SeaSurf
+
             SeaSurf(app)
             logger.info("CSRF habilitado con Flask-SeaSurf")
         except Exception as e:
             logger.warning(f"ENABLE_CSRF activo pero Flask-SeaSurf no disponible: {e}")
-    
+
     # Rate Limiting
     try:
         from flask_limiter import Limiter
         from flask_limiter.util import get_remote_address
-        
+
         limiter = Limiter(
             app=app,
             key_func=get_remote_address,
             default_limits=["200 per day", "50 per hour"],
-            storage_uri=os.environ.get("REDIS_URL", "memory://")
+            storage_uri=os.environ.get("REDIS_URL", "memory://"),
         )
         app.config["RATELIMIT_ENABLED"] = True
         logger.info("Rate limiting habilitado")
@@ -149,7 +151,7 @@ def create_app() -> Flask:
     from .web.contact import bp as contact_bp
     from .web.admin import bp as admin_bp
     from .web.public import bp as root_bp
-    
+
     # Blueprints - API routes (REST)
     from .api.v1 import bp as api_v1_bp
 
@@ -159,7 +161,7 @@ def create_app() -> Flask:
     app.register_blueprint(contact_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(root_bp)
-    
+
     # Register API blueprints
     app.register_blueprint(api_v1_bp)
 
@@ -183,22 +185,22 @@ def create_app() -> Flask:
     # Error handlers centralizados
     from .utils.error_handler import handle_app_error, handle_http_exception, handle_generic_exception
     from .utils.exceptions import AppError
-    
+
     @app.errorhandler(AppError)
     def handle_app_error_wrapper(error):
         return handle_app_error(error)
-    
+
     @app.errorhandler(404)
     @app.errorhandler(403)
     @app.errorhandler(401)
     @app.errorhandler(400)
     def handle_http_errors(error):
         return handle_http_exception(error)
-    
+
     @app.errorhandler(500)
     def handle_500(error):
         return handle_generic_exception(error)
-    
+
     @app.errorhandler(Exception)
     def handle_all_exceptions(error):
         # Si ya es un AppError o HTTPException, dejar que otros handlers lo manejen
@@ -216,19 +218,13 @@ def _migrate_default_users(app):
         "gestor": {"password": "gestor123", "role": "gestor"},
         "usuario": {"password": "user123", "role": "user"},
     }
-    
+
     for username, user_data in default_users.items():
         existing_user = User.query.filter_by(username=username).first()
         if not existing_user:
-            new_user = User(
-                username=username,
-                role=user_data["role"],
-                active=True
-            )
+            new_user = User(username=username, role=user_data["role"], active=True)
             new_user.set_password(user_data["password"])
             db.session.add(new_user)
             logger.info(f"Usuario por defecto creado: {username} ({user_data['role']})")
-    
+
     db.session.commit()
-
-

@@ -1,4 +1,3 @@
 """
 Domain features package.
 """
-
