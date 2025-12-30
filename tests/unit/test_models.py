@@ -14,28 +14,34 @@ from app.models import User, Case, Promise, Activity, ContactSubmission
 def sample_user(app):
     """Crea un usuario de prueba."""
     with app.app_context():
-        user = User(username="testuser", role="gestor", active=True)
-        user.set_password("testpass123")
-        db.session.add(user)
-        db.session.commit()
+        # Verificar si ya existe
+        user = User.query.filter_by(username="testuser").first()
+        if not user:
+            user = User(username="testuser", role="gestor", active=True)
+            user.set_password("testpass123")
+            db.session.add(user)
+            db.session.commit()
+            db.session.refresh(user)  # Refrescar para asegurar que esté en la sesión
         return user
 
 
 @pytest.fixture
 def sample_case(app, sample_user):
     """Crea un caso de prueba."""
-    case = Case(
-        entity="Test Entity",
-        debtor_name="John Doe",
-        dni="12345678",
-        amount=Decimal("10000.50"),
-        status="en_gestion",
-        cartera="Cartera A",
-        assigned_to_id=sample_user.id,
-    )
-    db.session.add(case)
-    db.session.commit()
-    return case
+    with app.app_context():
+        case = Case(
+            entity="Test Entity",
+            debtor_name="John Doe",
+            dni="12345678",
+            amount=Decimal("10000.50"),
+            status="en_gestion",
+            cartera="Cartera A",
+            assigned_to_id=sample_user.id,
+        )
+        db.session.add(case)
+        db.session.commit()
+        db.session.refresh(case)  # Refrescar para asegurar que esté en la sesión
+        return case
 
 
 def test_user_creation(sample_user):

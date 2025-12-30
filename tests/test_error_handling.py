@@ -115,10 +115,10 @@ class TestErrorHandlersInApp:
         """Test que StorageError se propaga correctamente."""
         from app.services.storage import save_submission_to_file
         from app.core.database import db
+        from unittest.mock import patch
 
         with app.app_context():
-            # Forzar un error cerrando la sesión de base de datos
-            db.session.close()
-
-            with pytest.raises(StorageError):
-                save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")
+            # Forzar un error usando mock para que commit falle
+            with patch.object(db.session, 'commit', side_effect=Exception("Database error")):
+                with pytest.raises(StorageError):
+                    save_submission_to_file("Test", "Test", "test@test.com", "123", "Msg")

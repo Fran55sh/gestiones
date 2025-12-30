@@ -208,6 +208,8 @@ def create_case():
 @bp.route("/cases/<int:case_id>")
 def get_case(case_id):
     """Obtiene un caso por ID. Admin puede ver todos, gestor solo sus casos asignados."""
+    from werkzeug.exceptions import NotFound
+    
     try:
         user_role = session.get("role")
         user_id = session.get("user_id")
@@ -223,6 +225,9 @@ def get_case(case_id):
             return jsonify({"success": False, "error": "No tiene permisos para ver este caso"}), 403
 
         return jsonify({"success": True, "data": case.to_dict(include_relations=True)})
+    except NotFound:
+        # Propagar el 404 sin convertirlo en 500
+        return jsonify({"success": False, "error": "Caso no encontrado"}), 404
     except Exception as e:
         app.logger.error(f"Error obteniendo caso: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

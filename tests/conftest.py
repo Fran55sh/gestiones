@@ -45,7 +45,8 @@ def app():
         # Crear usuarios de prueba para autenticación
         admin_user = User(username="admin", password_hash=generate_password_hash("admin123"), role="admin")
         gestor_user = User(username="gestor", password_hash=generate_password_hash("gestor123"), role="gestor")
-        db.session.add_all([admin_user, gestor_user])
+        usuario_user = User(username="usuario", password_hash=generate_password_hash("user123"), role="user")
+        db.session.add_all([admin_user, gestor_user, usuario_user])
         db.session.commit()
 
         yield app
