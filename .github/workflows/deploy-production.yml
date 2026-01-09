@@ -102,13 +102,13 @@ jobs:
           
           # Deploy with Docker Compose
           echo "🐳 Stopping containers..."
-          docker-compose -f docker-compose.prod.yml down
+          docker-compose -f config/docker/docker-compose.prod.yml down
           
           echo "🔨 Building new images..."
-          docker-compose -f docker-compose.prod.yml build --no-cache
+          docker-compose -f config/docker/docker-compose.prod.yml build --no-cache
           
           echo "🚀 Starting containers..."
-          docker-compose -f docker-compose.prod.yml up -d
+          docker-compose -f config/docker/docker-compose.prod.yml up -d
           
           # Wait for container to be healthy
           echo "⏳ Waiting for container to start..."
@@ -120,7 +120,7 @@ jobs:
           
           # Show logs
           echo "📝 Recent logs:"
-          docker-compose -f docker-compose.prod.yml logs --tail=20
+          docker-compose -f config/docker/docker-compose.prod.yml logs --tail=20
           
           echo "🎉 Deployment to PRODUCTION completed!"
     
@@ -152,8 +152,8 @@ jobs:
           
           # Rebuild and restart with previous version
           echo "🐳 Rebuilding previous version..."
-          docker-compose -f docker-compose.prod.yml down
-          docker-compose -f docker-compose.prod.yml up -d --build
+          docker-compose -f config/docker/docker-compose.prod.yml down
+          docker-compose -f config/docker/docker-compose.prod.yml up -d --build
           
           echo "🔄 Rollback completed"
     

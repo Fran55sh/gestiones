@@ -151,8 +151,9 @@ SECRET_KEY=otro_secret_key_diferente_y_mas_seguro
 FLASK_ENV=production
 FLASK_DEBUG=0
 
-# Database (PostgreSQL para prod)
-DATABASE_URL=postgresql://usuario:password@localhost:5432/gestiones_prod
+# Database (PostgreSQL para prod - gestionado por Docker)
+DATABASE_URL=postgresql://gestiones_user:password_seguro@db:5432/gestiones
+DB_PASSWORD=password_seguro  # Generar con: openssl rand -base64 32
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -170,56 +171,96 @@ DEBUG=False
 TESTING=False
 ```
 
-### 2.4 Verificar Docker Compose Files
+### 2.4 Configurar Base de Datos PostgreSQL para Producción
 
-Asegúrate de que los archivos `docker-compose.dev.yml` y `docker-compose.prod.yml` existan en el repositorio.
+La aplicación usa **SQLite para desarrollo** (simple y sin configuración) y **PostgreSQL para producción** (robusto y escalable).
 
-**`docker-compose.dev.yml`** (ya debe estar en el repo):
-```yaml
-version: '3.8'
-services:
-  web:
-    build: .
-    ports:
-      - "127.0.0.1:5001:5000"
-    env_file:
-      - .env.dev
-    volumes:
-      - ./:/app
-    restart: always
+#### PostgreSQL se levanta automáticamente con Docker Compose
+
+El archivo `config/docker/docker-compose.prod.yml` incluye un contenedor de PostgreSQL que:
+- Se inicia automáticamente con la aplicación
+- Persiste los datos en un volumen Docker (`postgres_data`)
+- Está configurado con health checks
+- La aplicación espera a que esté listo antes de arrancar
+
+**No necesitas instalar PostgreSQL manualmente en el servidor.**
+
+#### Generar contraseña segura para la base de datos
+
+```bash
+# Generar password para DB_PASSWORD
+openssl rand -base64 32
 ```
 
-**`docker-compose.prod.yml`** (ya debe estar en el repo):
-```yaml
-version: '3.8'
-services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
-    ports:
-      - "127.0.0.1:5000:5000"
-    env_file:
-      - .env.prod
-    restart: always
-```
+Copia la contraseña generada y úsala en `.env.prod` para `DB_PASSWORD`.
 
-### 2.5 Iniciar la Aplicación con Docker
+#### Inicializar la base de datos en producción
+
+Después del primer deploy, ejecuta el script de inicialización:
 
 ```bash
 cd /home/ubuntu/gestiones
 
-# Para DEVELOPMENT
-docker-compose -f docker-compose.dev.yml up -d --build
+# Esperar a que los contenedores estén corriendo
+docker ps
 
-# Para PRODUCTION
-docker-compose -f docker-compose.prod.yml up -d --build
+# Ejecutar script de inicialización
+bash scripts/setup/init-prod-db.sh
+```
+
+Este script:
+1. Espera a que PostgreSQL esté listo
+2. Crea las tablas de la base de datos
+3. Carga los usuarios de prueba (admin, gestor, usuario)
+4. Carga datos de ejemplo para testing
+
+#### Ver datos en PostgreSQL
+
+```bash
+# Conectarse a PostgreSQL
+docker exec -it gestiones-db-prod psql -U gestiones_user -d gestiones
+
+# Dentro de psql:
+# \dt  - Listar tablas
+# SELECT * FROM users;  - Ver usuarios
+# \q  - Salir
+```
+
+#### Backup de la base de datos
+
+```bash
+# Backup
+docker exec gestiones-db-prod pg_dump -U gestiones_user gestiones > backup_$(date +%Y%m%d).sql
+
+# Restaurar
+cat backup_20240109.sql | docker exec -i gestiones-db-prod psql -U gestiones_user -d gestiones
+```
+
+### 2.5 Verificar Docker Compose Files
+
+Los archivos de Docker Compose están en `config/docker/`:
+- `config/docker/docker-compose.dev.yml` - Desarrollo (SQLite)
+- `config/docker/docker-compose.prod.yml` - Producción (PostgreSQL)
+
+### 2.6 Iniciar la Aplicación con Docker
+
+```bash
+cd /home/ubuntu/gestiones
+
+# Para DEVELOPMENT (SQLite, puerto 5001)
+docker-compose -f config/docker/docker-compose.dev.yml up -d --build
+
+# Para PRODUCTION (PostgreSQL, puerto 5000)
+docker-compose -f config/docker/docker-compose.prod.yml up -d --build
 
 # Verificar que está corriendo
 docker ps
 
 # Ver logs
-docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f config/docker/docker-compose.dev.yml logs -f
+
+# Para producción
+docker-compose -f config/docker/docker-compose.prod.yml logs -f
 ```
 
 ## ⚙️ Paso 3: Configurar Permisos (Opcional)
@@ -240,8 +281,8 @@ After=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/home/ubuntu/gestiones
-ExecStart=/usr/bin/docker-compose -f docker-compose.dev.yml up -d
-ExecStop=/usr/bin/docker-compose -f docker-compose.dev.yml down
+ExecStart=/usr/bin/docker-compose -f config/docker/docker-compose.dev.yml up -d
+ExecStop=/usr/bin/docker-compose -f config/docker/docker-compose.dev.yml down
 User=ubuntu
 
 [Install]
@@ -343,11 +384,11 @@ sudo certbot --nginx -d tu-dominio.com
 cd /home/ubuntu/gestiones
 
 # Para DEVELOP
-docker-compose -f docker-compose.dev.yml up -d --build
+docker-compose -f config/docker/docker-compose.dev.yml up -d --build
 
 # Verificar que arrancó
 docker ps
-docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f config/docker/docker-compose.dev.yml logs -f
 ```
 
 ### 5.2 Deploy Automático desde GitHub
@@ -368,10 +409,10 @@ Ve a GitHub → Actions → Verás el workflow ejecutándose
 cd /home/ubuntu/gestiones
 
 # Ver logs en tiempo real
-docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f config/docker/docker-compose.dev.yml logs -f
 
 # Ver solo los últimos 50 logs
-docker-compose -f docker-compose.dev.yml logs --tail=50
+docker-compose -f config/docker/docker-compose.dev.yml logs --tail=50
 ```
 
 ## 🔄 Flujo de Deploy
@@ -402,25 +443,25 @@ docker ps
 docker ps -a
 
 # Ver logs en tiempo real
-docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f config/docker/docker-compose.dev.yml logs -f
 
 # Ver logs de un servicio específico
-docker-compose -f docker-compose.dev.yml logs -f web
+docker-compose -f config/docker/docker-compose.dev.yml logs -f web
 
 # Reiniciar contenedores
-docker-compose -f docker-compose.dev.yml restart
+docker-compose -f config/docker/docker-compose.dev.yml restart
 
 # Detener contenedores
-docker-compose -f docker-compose.dev.yml down
+docker-compose -f config/docker/docker-compose.dev.yml down
 
 # Iniciar contenedores
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f config/docker/docker-compose.dev.yml up -d
 
 # Rebuilar y reiniciar
-docker-compose -f docker-compose.dev.yml up -d --build
+docker-compose -f config/docker/docker-compose.dev.yml up -d --build
 
 # Entrar al contenedor (para debug)
-docker-compose -f docker-compose.dev.yml exec web bash
+docker-compose -f config/docker/docker-compose.dev.yml exec web bash
 
 # Ver estadísticas de uso de recursos
 docker stats
@@ -468,7 +509,7 @@ free -h
 
 ```bash
 # Ver logs detallados
-docker-compose -f docker-compose.dev.yml logs
+docker-compose -f config/docker/docker-compose.dev.yml logs
 
 # Ver estado de contenedores
 docker ps -a
@@ -477,9 +518,9 @@ docker ps -a
 docker images
 
 # Rebuild desde cero
-docker-compose -f docker-compose.dev.yml down
-docker-compose -f docker-compose.dev.yml build --no-cache
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f config/docker/docker-compose.dev.yml down
+docker-compose -f config/docker/docker-compose.dev.yml build --no-cache
+docker-compose -f config/docker/docker-compose.dev.yml up -d
 ```
 
 ### Puerto en uso
@@ -518,13 +559,13 @@ sudo kill -9 <pid>
 
 ```bash
 # Ver por qué falla
-docker-compose -f docker-compose.dev.yml logs --tail=100
+docker-compose -f config/docker/docker-compose.dev.yml logs --tail=100
 
 # Verificar archivo .env existe
 ls -la /home/ubuntu/gestiones/.env.dev
 
 # Verificar variables de entorno
-docker-compose -f docker-compose.dev.yml config
+docker-compose -f config/docker/docker-compose.dev.yml config
 ```
 
 ### Error "No space left on device"

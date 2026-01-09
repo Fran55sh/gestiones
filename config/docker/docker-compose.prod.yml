@@ -1,9 +1,28 @@
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: gestiones-db-prod
+    environment:
+      POSTGRES_DB: gestiones
+      POSTGRES_USER: gestiones_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestiones_user -d gestiones"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   web:
     build:
       context: ../..
       dockerfile: config/docker/Dockerfile.prod
     container_name: gestiones-mvp-prod
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "127.0.0.1:5000:5000"  # Solo accesible desde localhost (Nginx)
     env_file:
@@ -11,6 +30,7 @@ services:
     environment:
       - FLASK_ENV=production
       - FLASK_APP=app/wsgi.py
+      - DATABASE_URL=postgresql://gestiones_user:${DB_PASSWORD}@db:5432/gestiones
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthz')"]
@@ -23,8 +43,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # Volúmenes para persistencia (si se necesita en el futuro)
-    # volumes:
-    #   - ./data:/app/data
-    #   - ./logs:/app/logs
+
+volumes:
+  postgres_data:
 
