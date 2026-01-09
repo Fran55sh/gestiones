@@ -10,8 +10,11 @@ from decimal import Decimal
 sys.path.insert(0, '.')
 
 from app import create_app
-from app.db import db
-from app.models import User, Case, Promise, Activity
+from app.core.database import db
+from app.features.users.models import User
+from app.features.cases.models import Case
+from app.features.cases.promise import Promise
+from app.features.activities.models import Activity
 
 
 def create_sample_data():
