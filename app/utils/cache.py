@@ -5,8 +5,7 @@ Utilidades de cache para optimización de performance.
 import json
 import hashlib
 from functools import wraps
-from flask import current_app, request
-from datetime import timedelta
+from flask import current_app
 
 try:
     import redis
@@ -67,7 +66,7 @@ def cache_result(timeout: int = 300, key_prefix: str = None):
                 if cached:
                     try:
                         return json.loads(cached)
-                    except:
+                    except Exception:
                         pass
 
             # Ejecutar función
@@ -77,7 +76,7 @@ def cache_result(timeout: int = 300, key_prefix: str = None):
             if redis_client:
                 try:
                     redis_client.setex(cache_key, timeout, json.dumps(result, default=str))
-                except:
+                except Exception:
                     pass
 
             return result
@@ -100,5 +99,5 @@ def invalidate_cache(pattern: str):
             keys = redis_client.keys(pattern)
             if keys:
                 redis_client.delete(*keys)
-        except:
+        except Exception:
             pass

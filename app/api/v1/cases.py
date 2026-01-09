@@ -496,7 +496,7 @@ def update_status():
                 <div class="space-y-4">
                     <label class="block text-sm font-medium text-gray-700 mb-3">Seleccionar Estado</label>
                     <input type="hidden" id="current-case-id" name="case_id" value="{case.id}">
-                    <select 
+                    <select
                         id="status-selector"
                         name="status-selector"
                         class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all text-base font-semibold"
@@ -615,8 +615,6 @@ def register_management():
 
         # Respuesta para HTMX - renderizar la gestión como HTML
         if request.headers.get("HX-Request"):
-            from datetime import datetime
-
             created_at = activity.created_at.strftime("%d/%m/%Y - %H:%M") if activity.created_at else "Ahora"
             creator_name = activity.creator.username if activity.creator else "Usuario"
 
@@ -631,7 +629,7 @@ def register_management():
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500">{created_at}</span>
-                        <button 
+                        <button
                             onclick="deleteActivity({activity.id})"
                             class="text-red-500 hover:text-red-700 transition-colors"
                             title="Eliminar gestión">

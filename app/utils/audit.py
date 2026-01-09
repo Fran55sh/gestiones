@@ -4,7 +4,7 @@ Utilidades para logging de auditoría.
 
 import logging
 from datetime import datetime
-from flask import request, session, current_app
+from flask import request, session
 from functools import wraps
 
 logger = logging.getLogger("audit")
