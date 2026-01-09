@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Gestión de Deudas</title>
+    <script src="/static/js/lib/htmx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/pages/admin.css">
+</head>
+<body>
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">GD</div>
+                <span>Gestión de Deudas</span>
+            </div>
+            <div class="filters">
+                <select class="date-selector" onchange="updatePeriod(this.value)">
+                    <option value="week">Última semana</option>
+                    <option value="month" selected>Último mes</option>
+                    <option value="quarter">Último trimestre</option>
+                    <option value="custom">Personalizado</option>
+                </select>
+                <button class="filter-btn">
+                    <select onchange="filterBy('cartera', this.value)">
+                        <option value="">Por cartera</option>
+                        <option value="all">Todas</option>
+                        <option value="1">Cartera A</option>
+                        <option value="2">Cartera B</option>
+                        <option value="3">Cartera C</option>
+                    </select>
+                </button>
+                <button class="filter-btn">
+                    <select onchange="filterBy('gestor', this.value)">
+                        <option value="">Por gestor</option>
+                        <option value="all">Todos</option>
+                        <option value="1">Gestor A</option>
+                        <option value="2">Gestor B</option>
+                        <option value="3">Gestor C</option>
+                    </select>
+                </button>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="notification-btn" onclick="toggleNotifications()">
+                <div class="notification-badge">3</div>
+                🔔
+            </div>
+            <div class="profile">
+                <div class="profile-img">A</div>
+                <span>Administrador</span>
+                <a href="/logout" style="margin-left: 15px; color: #ef4444; text-decoration: none;">Salir</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- FILTER CHIPS -->
+        <div class="sidebar-filters">
+            <div class="filter-chip active" onclick="toggleFilter(this)">Todas las carteras</div>
+            <div class="filter-chip" onclick="toggleFilter(this)">Promesas</div>
+            <div class="filter-chip" onclick="toggleFilter(this)">Pagadas</div>
+            <div class="filter-chip" onclick="toggleFilter(this)">En gestión</div>
+            <div class="filter-chip" onclick="toggleFilter(this)">Alta prioridad</div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpis-grid">
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div>
+                        <div class="kpi-label">Monto Total Recuperado</div>
+                        <div class="kpi-value">$245,890</div>
+                        <div class="kpi-change positive">↑ 12.5% vs mes anterior</div>
+                    </div>
+                    <div class="kpi-icon icon-recovered">💰</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div>
+                        <div class="kpi-label">Tasa de Recupero</div>
+                        <div class="kpi-value">68.3%</div>
+                        <div class="kpi-change positive">↑ 4.2% vs mes anterior</div>
+                    </div>
+                    <div class="kpi-icon icon-percentage">📊</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div>
+                        <div class="kpi-label">Promesas Cumplidas</div>
+                        <div class="kpi-value">82.1%</div>
+                        <div class="kpi-change positive">↑ 8.5% vs mes anterior</div>
+                    </div>
+                    <div class="kpi-icon icon-promises">✅</div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <div>
+                        <div class="kpi-label">Gestiones Realizadas</div>
+                        <div class="kpi-value">1,247</div>
+                        <div class="kpi-change positive">↑ 15.3% vs mes anterior</div>
+                    </div>
+                    <div class="kpi-icon icon-gestions">📞</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CHARTS GRID -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3 class="chart-title">Rendimiento Global - Últimas 4 Semanas</h3>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="ranking-card">
+                <h3 class="chart-title">Ranking de Gestores</h3>
+                <div class="ranking-item" onclick="openGestorDetail('Gestor A')">
+                    <div class="ranking-info">
+                        <div class="ranking-avatar">A</div>
+                        <div>
+                            <div class="ranking-name">Gestor A</div>
+                            <div class="ranking-percentage">45 promesas cumplidas</div>
+                        </div>
+                    </div>
+                    <div class="ranking-stats">
+                        <div class="ranking-amount">$89,450</div>
+                        <div class="ranking-percentage">92.3%</div>
+                    </div>
+                </div>
+                <div class="ranking-item" onclick="openGestorDetail('Gestor B')">
+                    <div class="ranking-info">
+                        <div class="ranking-avatar">B</div>
+                        <div>
+                            <div class="ranking-name">Gestor B</div>
+                            <div class="ranking-percentage">38 promesas cumplidas</div>
+                        </div>
+                    </div>
+                    <div class="ranking-stats">
+                        <div class="ranking-amount">$76,230</div>
+                        <div class="ranking-percentage">88.1%</div>
+                    </div>
+                </div>
+                <div class="ranking-item" onclick="openGestorDetail('Gestor C')">
+                    <div class="ranking-info">
+                        <div class="ranking-avatar">C</div>
+                        <div>
+                            <div class="ranking-name">Gestor C</div>
+                            <div class="ranking-percentage">32 promesas cumplidas</div>
+                        </div>
+                    </div>
+                    <div class="ranking-stats">
+                        <div class="ranking-amount">$65,180</div>
+                        <div class="ranking-percentage">84.7%</div>
+                    </div>
+                </div>
+                <div class="ranking-item" onclick="openGestorDetail('Gestor D')">
+                    <div class="ranking-info">
+                        <div class="ranking-avatar">D</div>
+                        <div>
+                            <div class="ranking-name">Gestor D</div>
+                            <div class="ranking-percentage">28 promesas cumplidas</div>
+                        </div>
+                    </div>
+                    <div class="ranking-stats">
+                        <div class="ranking-amount">$54,030</div>
+                        <div class="ranking-percentage">79.2%</div>
+                    </div>
+                </div>
+                <div class="ranking-item" onclick="openGestorDetail('Gestor E')">
+                    <div class="ranking-info">
+                        <div class="ranking-avatar">E</div>
+                        <div>
+                            <div class="ranking-name">Gestor E</div>
+                            <div class="ranking-percentage">25 promesas cumplidas</div>
+                        </div>
+                    </div>
+                    <div class="ranking-stats">
+                        <div class="ranking-amount">$48,100</div>
+                        <div class="ranking-percentage">76.5%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECONDARY GRID -->
+        <div class="secondary-grid">
+            <div class="chart-card">
+                <h3 class="chart-title">Distribución por Cartera</h3>
+                <div class="dona-chart-container">
+                    <canvas id="carteraChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">Estado Actual de Deudas</h3>
+                <div class="status-bar">
+                    <div class="status-row">
+                        <div class="status-label">En Gestión</div>
+                        <div class="status-bar-container">
+                            <div class="status-bar-fill status-gestion" style="width: 45%;">1,245 casos</div>
+                        </div>
+                    </div>
+                    <div class="status-row">
+                        <div class="status-label">Promesa de Pago</div>
+                        <div class="status-bar-container">
+                            <div class="status-bar-fill status-promise" style="width: 30%;">543 casos</div>
+                        </div>
+                    </div>
+                    <div class="status-row">
+                        <div class="status-label">Pagadas</div>
+                        <div class="status-bar-container">
+                            <div class="status-bar-fill status-paid" style="width: 20%;">856 casos</div>
+                        </div>
+                    </div>
+                    <div class="status-row">
+                        <div class="status-label">Incobrables</div>
+                        <div class="status-bar-container">
+                            <div class="status-bar-fill status-bad" style="width: 5%;">142 casos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ALERTS -->
+        <div class="alerts-section">
+            <h3 class="chart-title">Alertas e Insights</h3>
+            <div class="alert-item success">
+                <span class="alert-icon">✓</span>
+                <div>Gestor A supera su promedio semanal en un 23% (Objetivo cumplido)</div>
+            </div>
+            <div class="alert-item warning">
+                <span class="alert-icon">⚠</span>
+                <div>Cartera B bajó su tasa de promesas cumplidas 12% esta semana</div>
+            </div>
+            <div class="alert-item error">
+                <span class="alert-icon">!</span>
+                <div>Gestor C no registra actividad en las últimas 48 horas</div>
+            </div>
+        </div>
+
+        <!-- COMPARATIVA TEMPORAL -->
+        <div class="chart-card">
+            <h3 class="chart-title">Comparativa Temporal - Mes Actual vs Mes Anterior</h3>
+            <div class="chart-container">
+                <canvas id="comparisonChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div>
+            <small style="color: #64748b;">Última actualización: <span id="lastUpdate"></span></small>
+        </div>
+        <div class="footer-links">
+            <a href="#" onclick="exportReport('excel')">📥 Exportar Excel</a>
+            <a href="#" onclick="exportReport('pdf')">📄 Exportar PDF</a>
+            <a href="#">⚙️ Configuración</a>
+        </div>
+    </footer>
+
+    <script src="/static/js/pages/admin.js"></script>
+</body>
+</html>

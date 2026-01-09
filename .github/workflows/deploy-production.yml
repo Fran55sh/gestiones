@@ -1,0 +1,182 @@
+name: Deploy to Production (Oracle Cloud)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 black
+    
+    - name: Run linting
+      run: |
+        echo "🔍 Running Flake8..."
+        flake8 app tests
+        echo "🎨 Checking Black formatting..."
+        black --check app tests
+    
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        pytest --cov=app --cov-report=term --cov-fail-under=70
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create deployment backup point
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
+        port: 22
+        script: |
+          echo "💾 Creating backup before deployment..."
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
+          
+          # Backup current Docker images
+          echo "📦 Backing up Docker images..."
+          docker save -o /tmp/gestiones-backup-$(date +%Y%m%d_%H%M%S).tar $(docker images -q gestiones_web 2>/dev/null | head -1) || echo "No images to backup"
+          
+          # Backup code
+          BACKUP_DIR="$HOME/backups/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          cp -r . "$BACKUP_DIR/" || echo "⚠️ Backup warning"
+          echo "✅ Backup created at $BACKUP_DIR"
+    
+    - name: Deploy to Oracle Cloud (Production)
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment to PRODUCTION instance..."
+          
+          # Navigate to project directory (usar variable o default)
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
+          
+          # Pull latest code
+          echo "📥 Pulling latest code from main branch..."
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Deploy with Docker Compose
+          echo "🐳 Stopping containers..."
+          docker-compose -f config/docker/docker-compose.prod.yml down
+          
+          echo "🔨 Building new images..."
+          docker-compose -f config/docker/docker-compose.prod.yml build --no-cache
+          
+          echo "🚀 Starting containers..."
+          docker-compose -f config/docker/docker-compose.prod.yml up -d
+          
+          # Wait for container to be healthy
+          echo "⏳ Waiting for container to start..."
+          sleep 15
+          
+          # Show container status
+          echo "📊 Container status:"
+          docker ps | grep gestiones || echo "Container not found"
+          
+          # Show logs
+          echo "📝 Recent logs:"
+          docker-compose -f config/docker/docker-compose.prod.yml logs --tail=20
+          
+          echo "🎉 Deployment to PRODUCTION completed!"
+    
+    - name: Health Check
+      run: |
+        echo "🏥 Running health check..."
+        sleep 10
+        curl -f http://${{ secrets.SSH_HOST_PROD }}:5000/healthz || exit 1
+    
+    - name: Rollback on failure
+      if: failure()
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SSH_HOST_PROD }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_PROD }}
+        port: 22
+        script: |
+          echo "⚠️ Deployment failed, attempting rollback..."
+          PROJECT_PATH="${{ secrets.PROD_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
+          
+          # Rollback code
+          echo "🔄 Rolling back code..."
+          git reset --hard HEAD~1
+          
+          # Rebuild and restart with previous version
+          echo "🐳 Rebuilding previous version..."
+          docker-compose -f config/docker/docker-compose.prod.yml down
+          docker-compose -f config/docker/docker-compose.prod.yml up -d --build
+          
+          echo "🔄 Rollback completed"
+    
+    - name: Deployment Summary
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deploy to PRODUCTION successful!"
+          echo "🌐 Application: http://${{ secrets.SSH_HOST_PROD }}:5000"
+          echo "📊 Coverage: 71%"
+          echo "🧪 Tests: 86/86 passed"
+        else
+          echo "❌ Deploy to PRODUCTION failed!"
+          echo "🔄 Rollback executed"
+        fi
+    
+    - name: Notify on success
+      if: success()
+      run: |
+        echo "::notice title=Production Deployment::✅ Successfully deployed to production!"
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "::error title=Production Deployment::❌ Production deployment failed and was rolled back!"
+

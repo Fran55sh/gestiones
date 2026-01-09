@@ -1,0 +1,18 @@
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: config/docker/Dockerfile.dev
+    container_name: gestiones-mvp-dev
+    ports:
+      - "127.0.0.1:5001:5000"
+    env_file:
+      - ../../.env.dev
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app/wsgi.py
+      - FLASK_DEBUG=1
+    volumes:
+      - ../..:/app
+    restart: unless-stopped
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5000"]

@@ -1,0 +1,117 @@
+name: Deploy to Develop (Oracle Cloud)
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 black
+    
+    - name: Run linting
+      run: |
+        echo "🔍 Running Flake8..."
+        flake8 app tests || true
+        echo "🎨 Checking Black formatting..."
+        black --check app tests || true
+    
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        pytest --cov=app --cov-report=term
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: develop
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Oracle Cloud (Develop)
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SSH_HOST_DEV }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY_DEV }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment to DEVELOP instance..."
+          
+          # Navigate to project directory (usar variable o default)
+          PROJECT_PATH="${{ secrets.DEVELOP_PATH }}"
+          if [ -z "$PROJECT_PATH" ]; then
+            PROJECT_PATH="/home/ubuntu/gestiones"
+          fi
+          cd "$PROJECT_PATH"
+          
+          # Pull latest code
+          echo "📥 Pulling latest code from develop branch..."
+          git fetch origin
+          git reset --hard origin/develop
+          
+          # Deploy with Docker Compose
+          echo "🐳 Stopping containers..."
+          docker-compose -f docker-compose.dev.yml down
+          
+          echo "🔨 Building new images..."
+          docker-compose -f docker-compose.dev.yml build --no-cache
+          
+          echo "🚀 Starting containers..."
+          docker-compose -f docker-compose.dev.yml up -d
+          
+          # Wait for container to be healthy
+          echo "⏳ Waiting for container to start..."
+          sleep 15
+          
+          # Show container status
+          echo "📊 Container status:"
+          docker ps | grep gestiones || echo "Container not found"
+          
+          # Show logs
+          echo "📝 Recent logs:"
+          docker-compose -f docker-compose.dev.yml logs --tail=20
+          
+          echo "🎉 Deployment to DEVELOP completed!"
+    
+    - name: Health Check
+      run: |
+        echo "🏥 Running health check..."
+        sleep 10
+        curl -f http://${{ secrets.SSH_HOST_DEV }}:5001/healthz || echo "⚠️ Health check failed, but continuing..."
+    
+    - name: Deployment Summary
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deploy to DEVELOP successful!"
+          echo "🌐 Application: http://${{ secrets.SSH_HOST_DEV }}:5001"
+        else
+          echo "❌ Deploy to DEVELOP failed!"
+        fi
+

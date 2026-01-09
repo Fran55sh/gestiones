@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estudio Jurídico - Gestión de Cobranza</title>
+    <link rel="stylesheet" href="/static/css/pages/index.css">
+</head>
+<body>
+    <!-- Navigation -->
+     <h1>develop</h1>
+    <nav>
+        <div class="nav-container">
+            <p>develop</p>
+            <img src="logo.png" alt="NOVA Gestión de Cobranzas" class="logo">
+            <ul class="nav-links">
+                <li><a href="#services">Servicios</a></li>
+                <li><a href="#about">Nosotros</a></li>
+                <li><a href="#contact">Contacto</a></li>
+            </ul>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="theme-toggle">
+                    <span class="theme-icon">🌙</span>
+                    <label class="theme-switch">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="theme-slider"></span>
+                    </label>
+                    <span class="theme-icon">☀️</span>
+                </div>
+                <a href="/gestiones" class="btn-primary">Acceso Clientes</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header>
+        <h1>Gestión Profesional de Cobranza</h1>
+        <p>Maximizamos la recuperación de su cartera de deudas con eficiencia y resultados comprobados</p>
+        <a href="#contact" class="btn-primary" style="display: inline-block;">Solicitar Propuesta</a>
+    </header>
+
+    <!-- Services Section -->
+    <section id="services">
+        <div class="container">
+            <h2 class="section-title">Nuestros Servicios</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-icon">📋</div>
+                    <h3>Gestión de Cartera</h3>
+                    <p>Administramos y monitoreamos su cartera de deudas con procesos optimizados que maximizan la tasa de recuperación y minimizan costos operativos.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">⚖️</div>
+                    <h3>Recuperación Judicial</h3>
+                    <p>Gestionamos el proceso completo de cobranza judicial, desde la demanda hasta la ejecución, asegurando el cumplimiento de todas las formalidades legales.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🔒</div>
+                    <h3>Cobranza Prejudicial</h3>
+                    <p>Implementamos estrategias de cobranza amigable y negociación previa a demandas, reduciendo costos y tiempos de recuperación.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">📊</div>
+                    <h3>Análisis de Cartera</h3>
+                    <p>Evaluamos su cartera de deudas para identificar oportunidades de recuperación, priorizar casos y optimizar la asignación de recursos.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🤝</div>
+                    <h3>Negociación y Acuerdos</h3>
+                    <p>Gestionamos acuerdos de pago efectivos con deudores, maximizando la recuperación mediante planes estructurados y seguimiento continuo.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">✅</div>
+                    <h3>Reportes y Analytics</h3>
+                    <p>Proporcionamos informes detallados y análisis en tiempo real sobre el estado de recuperación de su cartera con métricas clave de rendimiento.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about">
+        <div class="container">
+            <h2 class="section-title">Nuestra Experiencia</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <h2>Su Socio Estratégico en Cobranza</h2>
+                    <p>Especializados en la recuperación de carteras para entidades financieras, nuestro estudio combina experiencia legal, tecnología avanzada y procesos optimizados para maximizar su tasa de recuperación.</p>
+                    <p>Trabajamos con bancos, cooperativas de ahorro y crédito, financieras y otras instituciones, ofreciendo soluciones escalables que se adaptan al tamaño y necesidades de su organización.</p>
+                    
+                    <ul class="benefits-list">
+                        <li><span class="check-icon">✓</span> Especialización en entidades financieras y bancarias</li>
+                        <li><span class="check-icon">✓</span> Más de 15 años recuperando millones en carteras</li>
+                        <li><span class="check-icon">✓</span> Tecnología avanzada y reportes en tiempo real</li>
+                        <li><span class="check-icon">✓</span> Modelo de cobro por éxito con tarifas competitivas</li>
+                        <li><span class="check-icon">✓</span> Compliance y transparencia total en todos los procesos</li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="stats-grid">
+                        <div class="stat">
+                            <div class="stat-number">$50M+</div>
+                            <div>Recuperado</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">45%</div>
+                            <div>Tasa Recuperación</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">100+</div>
+                            <div>Entidades Financieras</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">15</div>
+                            <div>Años Experiencia</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact">
+        <div class="container">
+            <h2 class="section-title">Contáctenos</h2>
+            <div class="contact-content">
+                <div class="contact-form">
+                    <h2 style="margin-bottom: 20px; color: #333;">Solicite una Propuesta</h2>
+                    <form id="contact-form">
+                        <div class="form-group">
+                            <label for="entity">Nombre de la Entidad</label>
+                            <input type="text" id="entity" name="entity" placeholder="Ej: Banco Nacional" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="name">Contacto Responsable</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Correo Electrónico</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Teléfono</label>
+                            <input type="tel" id="phone" name="phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Información de su cartera (volumen, tipos de crédito, etc.)</label>
+                            <textarea id="message" name="message" placeholder="Describa brevemente el volumen y características de su cartera" required></textarea>
+                        </div>
+                        <button type="submit" class="btn-submit">Solicitar Propuesta</button>
+                    </form>
+                </div>
+                <div class="contact-info">
+                    <h2>Información de Contacto</h2>
+                    <div class="info-item">
+                        <span class="info-icon">📍</span>
+                        <div>
+                            <strong>Dirección</strong><br>
+                            Alsina 95, piso 7. ofi. 5<br>
+                            Bahia Blanca, Buenos Aires, Argentina
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">📞</span>
+                        <div>
+                            <strong>Teléfono</strong><br>
+                            291-418-9326 / 291-449-5300
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">✉️</span>
+                        <div>
+                            <strong>Email</strong><br>
+                            administracion@novagestiones.com.ar
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">🕒</span>
+                        <div>
+                            <strong>Horario Comercial</strong><br>
+                            Lunes - Viernes: 8:00 AM - 7:00 PM<br>
+                            Respuesta garantizada en 24 horas
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-icon">💼</span>
+                        <div>
+                            <strong>Servicio a Entidades</strong><br>
+                            Especialistas en bancos, financieras<br>
+                            y cooperativas de crédito
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Estudio Jurídico - Gestión de Cobranza. Todos los derechos reservados.</p>
+            <p style="margin-top: 10px; opacity: 0.8;">Servicios especializados en recuperación de carteras para entidades financieras</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/pages/index.js"></script>
+</body>
+</html>
+
