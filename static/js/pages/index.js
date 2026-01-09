@@ -88,9 +88,9 @@ const logo = document.querySelector('.logo');
 function updateLogo(theme) {
     if (logo) {
         if (theme === 'dark') {
-            logo.src = 'logo-dark.png';
+            logo.src = '/static/assets/images/logo-dark.png';
         } else {
-            logo.src = 'logo.png';
+            logo.src = '/static/assets/images/logo.png';
         }
     }
 }
