@@ -1,12 +1,15 @@
 ﻿// Dashboard Gestor - Integrado con APIs reales
 
 // Variables globales
-let clienteActual = null;
+let clienteActual = null;  // Cliente actual (datos del cliente)
+let deudaActual = null;  // Deuda actual (caso específico)
+let grupoClienteActual = null;  // Grupo actual (cliente + todas sus deudas)
 let carteraActual = null;  // Ahora será un objeto con id y nombre
 let carteraActualId = null;  // ID de la cartera actual
-let indiceClienteActual = 0;
-let clientesCarteraActual = [];
-let todosLosCasos = [];  // Todos los casos cargados desde la API
+let indiceGrupoActual = 0;  // Índice del grupo actual (cliente)
+let indiceDeudaActual = 0;  // Índice de la deuda actual dentro del grupo
+let gruposCarteraActual = [];  // Grupos de clientes (agrupados por DNI) de la cartera actual
+let todosLosGrupos = [];  // Todos los grupos cargados desde la API
 let isLoading = false;
 let carterasDisponibles = [];  // Lista de carteras cargadas desde la API
 
@@ -18,8 +21,19 @@ function calcularMesesMora(fechaUltimoPago) {
     }
     
     try {
-        // La fecha viene en formato ISO string (ej: "2024-10-05")
-        const fechaPago = new Date(fechaUltimoPago);
+        // Parsear fecha manualmente para evitar problemas de zona horaria
+        let fechaPago;
+        if (typeof fechaUltimoPago === 'string' && fechaUltimoPago.match(/^\d{4}-\d{2}-\d{2}/)) {
+            // Formato ISO: YYYY-MM-DD
+            const partes = fechaUltimoPago.split('T')[0].split('-');
+            const año = parseInt(partes[0], 10);
+            const mes = parseInt(partes[1], 10) - 1; // Mes es 0-indexed en JS
+            const dia = parseInt(partes[2], 10);
+            // Crear fecha en hora local (no UTC) para evitar problemas de zona horaria
+            fechaPago = new Date(año, mes, dia);
+        } else {
+            fechaPago = new Date(fechaUltimoPago);
+        }
         const hoy = new Date();
         
         // Validar que la fecha sea válida
@@ -93,12 +107,47 @@ function mapCaseToCliente(caseData) {
     }
     
     // Formatear fecha último pago
+    // IMPORTANTE: Parsear la fecha manualmente para evitar problemas de zona horaria
+    // La BD tiene formato YYYY-MM-DD y debe mostrarse como DD-MM-YYYY
     let fechaUltimoPagoFormateada = 'N/A';
     if (caseData.fecha_ultimo_pago) {
         try {
-            const fecha = new Date(caseData.fecha_ultimo_pago);
-            fechaUltimoPagoFormateada = fecha.toLocaleDateString('es-AR');
+            const fechaStr = String(caseData.fecha_ultimo_pago).trim();
+            
+            // Detectar formato YYYY-MM-DD (puede tener 1 o 2 dígitos en mes/día)
+            // Ejemplos: "2024-10-05", "2024-10-5", "2024-1-5"
+            const isoMatch = fechaStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (isoMatch) {
+                // Formato ISO: YYYY-MM-DD
+                const año = parseInt(isoMatch[1], 10);
+                const mes = parseInt(isoMatch[2], 10); // Mes (1-12)
+                const dia = parseInt(isoMatch[3], 10);
+                
+                // Validar que los valores sean correctos
+                if (año > 0 && mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31) {
+                    // Formatear manualmente como DD-MM-YYYY
+                    fechaUltimoPagoFormateada = `${dia.toString().padStart(2, '0')}-${mes.toString().padStart(2, '0')}-${año}`;
+                    console.log(`[DEBUG] Fecha formateada: ${fechaStr} -> ${fechaUltimoPagoFormateada}`);
+                } else {
+                    console.warn(`[WARN] Fecha inválida: ${fechaStr} (año=${año}, mes=${mes}, dia=${dia})`);
+                    fechaUltimoPagoFormateada = fechaStr;
+                }
+            } else {
+                // Si no es formato ISO, intentar parsear con Date
+                const fecha = new Date(fechaStr);
+                if (!isNaN(fecha.getTime())) {
+                    // Formatear manualmente como DD-MM-YYYY
+                    const dia = fecha.getDate();
+                    const mes = fecha.getMonth() + 1; // getMonth() retorna 0-11
+                    const año = fecha.getFullYear();
+                    fechaUltimoPagoFormateada = `${dia.toString().padStart(2, '0')}-${mes.toString().padStart(2, '0')}-${año}`;
+                } else {
+                    console.warn(`[WARN] No se pudo parsear fecha: ${fechaStr}`);
+                    fechaUltimoPagoFormateada = fechaStr;
+                }
+            }
         } catch (e) {
+            console.error('[ERROR] Error formateando fecha_ultimo_pago:', e, caseData.fecha_ultimo_pago);
             fechaUltimoPagoFormateada = caseData.fecha_ultimo_pago;
         }
     }
@@ -106,10 +155,11 @@ function mapCaseToCliente(caseData) {
     // Calcular meses de mora
     const mesesMora = calcularMesesMora(caseData.fecha_ultimo_pago);
     
-    // Calcular monto total con interés del 5% mensual
+    // Calcular monto total con interés simple del 5% mensual
+    // Fórmula: monto * (1 + 0.05 * meses_mora) = monto + (monto * 0.05 * meses_mora)
     const montoBase = parseFloat(caseData.total) || 0;
     const interesMensual = 0.05; // 5%
-    const montoConInteres = montoBase * Math.pow(1 + interesMensual, mesesMora);
+    const montoConInteres = montoBase * (1 + interesMensual * mesesMora);
     
     return {
         id: caseData.id,
@@ -142,41 +192,92 @@ function mapCaseToCliente(caseData) {
     };
 }
 
-// Función para cargar casos desde la API
+// Función para cargar casos agrupados desde la API
 async function loadCasosFromAPI() {
     if (isLoading) return;
     
     isLoading = true;
     try {
-        const response = await fetch('/api/cases/gestor');
+        // Usar el nuevo endpoint que retorna datos agrupados por DNI
+        const url = carteraActualId 
+            ? `/api/cases/gestor/agrupados?cartera_id=${carteraActualId}`
+            : '/api/cases/gestor/agrupados';
+        const response = await fetch(url);
+        
+        // Verificar si la respuesta es OK
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[ERROR] Respuesta del servidor no OK:', response.status, errorText);
+            throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
+        }
+        
         const result = await response.json();
+        console.log('[DEBUG] Respuesta de la API:', result);
         
         if (result.success) {
             // Limpiar datos antiguos primero
-            todosLosCasos = [];
-            clientesCarteraActual = [];
+            todosLosGrupos = [];
+            gruposCarteraActual = [];
+            grupoClienteActual = null;
             clienteActual = null;
-            indiceClienteActual = 0;
+            deudaActual = null;
+            indiceGrupoActual = 0;
+            indiceDeudaActual = 0;
             
-            // Cargar nuevos datos
-            todosLosCasos = result.data || [];
-            console.log(`[OK] Cargados ${todosLosCasos.length} casos desde la API`);
+            // Cargar nuevos datos (ya vienen agrupados por DNI)
+            todosLosGrupos = result.data || [];
+            console.log(`[OK] Cargados ${todosLosGrupos.length} grupos (clientes) desde la API, ${result.total_deudas} deudas totales`);
             
-            // Si no hay casos, mostrar mensaje y salir
-            if (todosLosCasos.length === 0) {
+            // DEBUG: Verificar grupos con múltiples deudas
+            todosLosGrupos.forEach(grupo => {
+                console.log(`[DEBUG] Grupo DNI ${grupo.dni}: total_deudas=${grupo.total_deudas}, deudas.length=${grupo.deudas?.length || 0}`);
+                if (grupo.total_deudas > 1 || (grupo.deudas && grupo.deudas.length > 1)) {
+                    console.log(`[DEBUG] Grupo DNI ${grupo.dni}: ${grupo.total_deudas} deudas (array length: ${grupo.deudas?.length})`, grupo.deudas.map(d => ({id: d.id, nro_cliente: d.nro_cliente, cartera_id: d.cartera_id, total: d.total})));
+                }
+                // Verificar si hay discrepancia
+                if (grupo.total_deudas !== (grupo.deudas?.length || 0)) {
+                    console.error(`[ERROR] Discrepancia en grupo DNI ${grupo.dni}: total_deudas=${grupo.total_deudas} pero deudas.length=${grupo.deudas?.length || 0}`);
+                }
+                // Log especial para DNI 20737173
+                if (grupo.dni === '20737173') {
+                    console.log(`[DEBUG ESPECIAL] DNI 20737173 encontrado:`, {
+                        total_deudas: grupo.total_deudas,
+                        deudas_length: grupo.deudas?.length || 0,
+                        deudas: grupo.deudas,
+                        grupo_completo: grupo
+                    });
+                }
+            });
+            
+            // Si no hay grupos, mostrar mensaje y salir
+            if (todosLosGrupos.length === 0) {
                 showNoCasesMessage();
                 updateTotalCounter();
                 return;
             }
             
-            // Convertir a formato cliente
-            const clientes = todosLosCasos.map(mapCaseToCliente);
+            // Filtrar grupos por cartera actual si hay cartera seleccionada
+            // IMPORTANTE: Mantener todas las deudas del grupo, solo filtrar grupos que tengan al menos una deuda en la cartera
+            if (carteraActualId) {
+                gruposCarteraActual = todosLosGrupos.filter(grupo => {
+                    // Verificar si alguna deuda del grupo pertenece a la cartera actual
+                    const tieneDeudaEnCartera = grupo.deudas.some(deuda => deuda.cartera_id === carteraActualId);
+                    if (tieneDeudaEnCartera && grupo.total_deudas > 1) {
+                        console.log(`[DEBUG] Grupo DNI ${grupo.dni} tiene ${grupo.total_deudas} deudas, al menos una en cartera ${carteraActualId}`);
+                    }
+                    return tieneDeudaEnCartera;
+                });
+            } else {
+                gruposCarteraActual = todosLosGrupos;
+            }
             
-            // Si no hay cartera seleccionada y hay casos, seleccionar la primera cartera con casos
-            if (!carteraActualId && clientes.length > 0) {
+            // Si no hay cartera seleccionada y hay grupos, seleccionar la primera cartera con casos
+            if (!carteraActualId && todosLosGrupos.length > 0) {
                 // Obtener la primera cartera que tenga casos
                 const primeraCarteraConCasos = carterasDisponibles.find(c => 
-                    clientes.some(cl => cl.cartera_id === c.id)
+                    todosLosGrupos.some(grupo => 
+                        grupo.deudas.some(deuda => deuda.cartera_id === c.id)
+                    )
                 );
                 if (primeraCarteraConCasos) {
                     selectCartera(primeraCarteraConCasos.id, primeraCarteraConCasos.nombre);
@@ -184,13 +285,11 @@ async function loadCasosFromAPI() {
                 }
             }
             
-            // Actualizar lista de clientes según la cartera actual
-            clientesCarteraActual = getClientesCartera();
-            
-            // Cargar primer cliente si hay
-            if (clientesCarteraActual.length > 0) {
-                indiceClienteActual = 0;
-                loadCliente(clientesCarteraActual[0], 0);
+            // Cargar primer grupo si hay
+            if (gruposCarteraActual.length > 0) {
+                indiceGrupoActual = 0;
+                indiceDeudaActual = 0;
+                cargarGrupoCliente(gruposCarteraActual[0], 0, 0);
             } else {
                 // Mostrar mensaje de que no hay casos
                 showNoCasesMessage();
@@ -202,34 +301,50 @@ async function loadCasosFromAPI() {
             console.error('[ERROR] Error cargando casos:', result.error);
             showErrorMessage('Error al cargar casos: ' + result.error);
             // Limpiar datos en caso de error
-            todosLosCasos = [];
-            clientesCarteraActual = [];
+            todosLosGrupos = [];
+            gruposCarteraActual = [];
+            grupoClienteActual = null;
             clienteActual = null;
+            deudaActual = null;
             showNoCasesMessage();
         }
     } catch (error) {
         console.error('[ERROR] Error en fetch:', error);
-        showErrorMessage('Error de conexión al cargar casos');
+        console.error('[ERROR] Detalles del error:', error.message, error.stack);
+        
+        // Intentar obtener más información del error
+        let errorMessage = 'Error de conexión al cargar casos';
+        if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        showErrorMessage(errorMessage);
         // Limpiar datos en caso de error
-        todosLosCasos = [];
-        clientesCarteraActual = [];
+        todosLosGrupos = [];
+        gruposCarteraActual = [];
+        grupoClienteActual = null;
         clienteActual = null;
+        deudaActual = null;
         showNoCasesMessage();
     } finally {
         isLoading = false;
     }
 }
 
-// Función para obtener lista de clientes de la cartera actual
-function getClientesCartera() {
-    if (!todosLosCasos || todosLosCasos.length === 0) {
+// Función para obtener grupos de clientes de la cartera actual
+function getGruposCartera() {
+    if (!todosLosGrupos || todosLosGrupos.length === 0) {
         return [];
     }
     
-    // Filtrar por cartera actual usando cartera_id
-    return todosLosCasos
-        .filter(c => c.cartera_id === carteraActualId)
-        .map(mapCaseToCliente);
+    // Filtrar grupos que tengan al menos una deuda en la cartera actual
+    if (carteraActualId) {
+        return todosLosGrupos.filter(grupo => {
+            return grupo.deudas.some(deuda => deuda.cartera_id === carteraActualId);
+        });
+    }
+    
+    return todosLosGrupos;
 }
 
 // Función para cargar estados de casos desde la API
@@ -324,17 +439,18 @@ function renderCarteraDropdown(carteras) {
     `).join('');
 }
 
-// Función para cambiar de cartera y cargar primer cliente
+// Función para cambiar de cartera y cargar primer grupo
 function changeCartera(carteraId) {
     carteraActualId = carteraId;
     const cartera = carterasDisponibles.find(c => c.id === carteraId);
     carteraActual = cartera ? cartera.nombre : null;
     
-    clientesCarteraActual = getClientesCartera();
+    gruposCarteraActual = getGruposCartera();
     
-    if (clientesCarteraActual.length > 0) {
-        indiceClienteActual = 0;
-        loadCliente(clientesCarteraActual[0], 0);
+    if (gruposCarteraActual.length > 0) {
+        indiceGrupoActual = 0;
+        indiceDeudaActual = 0;
+        cargarGrupoCliente(gruposCarteraActual[0], 0, 0);
         updateCarteraSelector(carteraId, cartera ? cartera.nombre : null);
         limpiarBusqueda();
     } else {
@@ -344,16 +460,38 @@ function changeCartera(carteraId) {
 
 // Función para navegar entre clientes (GLOBAL - usada por onclick en HTML)
 window.navegarCliente = function(direccion) {
-    clientesCarteraActual = getClientesCartera();
-    if (clientesCarteraActual.length === 0) return;
+    gruposCarteraActual = getGruposCartera();
+    if (gruposCarteraActual.length === 0) return;
 
     if (direccion === 'prev') {
-        indiceClienteActual = indiceClienteActual > 0 ? indiceClienteActual - 1 : clientesCarteraActual.length - 1;
+        indiceGrupoActual = indiceGrupoActual > 0 ? indiceGrupoActual - 1 : gruposCarteraActual.length - 1;
     } else {
-        indiceClienteActual = indiceClienteActual < clientesCarteraActual.length - 1 ? indiceClienteActual + 1 : 0;
+        indiceGrupoActual = indiceGrupoActual < gruposCarteraActual.length - 1 ? indiceGrupoActual + 1 : 0;
     }
+    
+    // Al cambiar de cliente, volver a la primera deuda
+    indiceDeudaActual = 0;
+    cargarGrupoCliente(gruposCarteraActual[indiceGrupoActual], indiceGrupoActual, 0);
+    actualizarContadores();
+}
 
-    loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
+// Función para navegar entre deudas del mismo cliente (GLOBAL - usada por onclick en HTML)
+window.navegarDeuda = function(direccion) {
+    if (!grupoClienteActual || grupoClienteActual.deudas.length <= 1) return;
+    
+    const totalDeudas = grupoClienteActual.deudas.length;
+    
+    if (direccion === 'prev') {
+        indiceDeudaActual = indiceDeudaActual > 0 ? indiceDeudaActual - 1 : totalDeudas - 1;
+    } else {
+        indiceDeudaActual = indiceDeudaActual < totalDeudas - 1 ? indiceDeudaActual + 1 : 0;
+    }
+    
+    // Cargar la nueva deuda
+    const deudaData = grupoClienteActual.deudas[indiceDeudaActual];
+    deudaActual = mapCaseToCliente(deudaData);
+    loadCliente(deudaActual, indiceGrupoActual);
+    actualizarContadores();
 }
 
 // Función para ir a un número de cliente específico (GLOBAL - usada por onclick en HTML)
@@ -367,8 +505,8 @@ window.irACliente = function() {
         return;
     }
 
-    clientesCarteraActual = getClientesCartera();
-    const totalClientes = clientesCarteraActual.length;
+    gruposCarteraActual = getGruposCartera();
+    const totalClientes = gruposCarteraActual.length;
 
     if (numeroCliente > totalClientes) {
         alert(`No existe el cliente #${numeroCliente}. Total de clientes en esta cartera: ${totalClientes}`);
@@ -382,8 +520,10 @@ window.irACliente = function() {
     document.getElementById('btn-clear-search').style.display = 'none';
 
     // Los números de cliente van de 1 a N, pero el índice es 0 a N-1
-    indiceClienteActual = numeroCliente - 1;
-    loadCliente(clientesCarteraActual[indiceClienteActual], indiceClienteActual);
+    indiceGrupoActual = numeroCliente - 1;
+    indiceDeudaActual = 0;
+    cargarGrupoCliente(gruposCarteraActual[indiceGrupoActual], indiceGrupoActual, 0);
+    actualizarContadores();
     
     // Limpiar el input
     input.value = '';
@@ -398,20 +538,27 @@ window.buscarCliente = function(busqueda) {
     }
 
     const termino = busqueda.trim().toLowerCase();
-    clientesCarteraActual = getClientesCartera();
+    gruposCarteraActual = getGruposCartera();
     
-    // Buscar en toda la cartera
-    const clienteEncontrado = clientesCarteraActual.find(cliente => {
-        const nombreMatch = cliente.nombre.toLowerCase().includes(termino);
-        const dniMatch = cliente.dni.replace(/\./g, '').toLowerCase().includes(termino.replace(/\./g, ''));
-        const numeroIdMatch = cliente.numeroId.toLowerCase().includes(termino);
+    // Buscar en toda la cartera (buscar en grupos por DNI, nombre, o nro_cliente de deudas)
+    const grupoEncontrado = gruposCarteraActual.find(grupo => {
+        const cliente = grupo.cliente;
+        const nombreMatch = `${cliente.name} ${cliente.lastname}`.toLowerCase().includes(termino);
+        const dniMatch = (cliente.dni || '').replace(/\./g, '').toLowerCase().includes(termino.replace(/\./g, ''));
         
-        return nombreMatch || dniMatch || numeroIdMatch;
+        // También buscar en nro_cliente de las deudas
+        const nroClienteMatch = grupo.deudas.some(deuda => 
+            (deuda.nro_cliente || '').toLowerCase().includes(termino)
+        );
+        
+        return nombreMatch || dniMatch || nroClienteMatch;
     });
 
-    if (clienteEncontrado) {
-        indiceClienteActual = clientesCarteraActual.indexOf(clienteEncontrado);
-        loadCliente(clienteEncontrado, indiceClienteActual);
+    if (grupoEncontrado) {
+        indiceGrupoActual = gruposCarteraActual.indexOf(grupoEncontrado);
+        indiceDeudaActual = 0;
+        cargarGrupoCliente(grupoEncontrado, indiceGrupoActual, 0);
+        actualizarContadores();
         // Mostrar botón de limpiar
         document.getElementById('btn-clear-search').style.display = 'block';
     } else {
@@ -425,18 +572,95 @@ window.limpiarBusqueda = function() {
     document.getElementById('search-input').value = '';
     document.getElementById('btn-clear-search').style.display = 'none';
     document.getElementById('go-to-number').value = '';
-    clientesCarteraActual = getClientesCartera();
-    if (clientesCarteraActual.length > 0) {
-        indiceClienteActual = 0;
-        loadCliente(clientesCarteraActual[0], 0);
+    gruposCarteraActual = getGruposCartera();
+    if (gruposCarteraActual.length > 0) {
+        indiceGrupoActual = 0;
+        indiceDeudaActual = 0;
+        cargarGrupoCliente(gruposCarteraActual[0], 0, 0);
+        actualizarContadores();
     }
 }
 
-// Función para cargar datos de un cliente
+// Función para cargar un grupo de cliente (cliente + deudas)
+function cargarGrupoCliente(grupo, indiceGrupo, indiceDeuda) {
+    console.log(`[DEBUG] cargarGrupoCliente - DNI: ${grupo.dni}`);
+    console.log(`[DEBUG]   - total_deudas: ${grupo.total_deudas}`);
+    console.log(`[DEBUG]   - deudas.length: ${grupo.deudas?.length || 0}`);
+    console.log(`[DEBUG]   - deudas:`, grupo.deudas?.map(d => ({id: d.id, nro_cliente: d.nro_cliente, cartera_id: d.cartera_id})) || []);
+    
+    // Verificar discrepancia
+    if (grupo.total_deudas !== (grupo.deudas?.length || 0)) {
+        console.error(`[ERROR] Discrepancia al cargar grupo: total_deudas=${grupo.total_deudas} pero deudas.length=${grupo.deudas?.length || 0}`);
+    }
+    
+    grupoClienteActual = grupo;
+    indiceGrupoActual = indiceGrupo;
+    indiceDeudaActual = indiceDeuda || 0;
+    
+    // Validar índice de deuda
+    if (indiceDeudaActual < 0 || indiceDeudaActual >= grupo.deudas.length) {
+        indiceDeudaActual = 0;
+    }
+    
+    console.log(`[DEBUG] Cargando deuda ${indiceDeudaActual + 1} de ${grupo.deudas.length} para DNI ${grupo.dni}`);
+    
+    // Obtener datos del cliente (del grupo)
+    clienteActual = grupo.cliente;
+    
+    // Obtener deuda actual
+    const deudaData = grupo.deudas[indiceDeudaActual];
+    if (!deudaData) {
+        console.error(`[ERROR] No hay deuda en índice ${indiceDeudaActual} para grupo DNI ${grupo.dni}`);
+        return;
+    }
+    
+    console.log(`[DEBUG] Deuda actual: ID ${deudaData.id}, Nro Cliente ${deudaData.nro_cliente}, Total ${deudaData.total}`);
+    
+    deudaActual = mapCaseToCliente(deudaData);
+    
+    // Cargar datos del cliente y deuda actual
+    loadCliente(deudaActual, indiceGrupo);
+    
+    // Actualizar selector de deudas si hay múltiples
+    actualizarSelectorDeudas(grupo);
+    
+    // Verificación adicional después de un pequeño delay
+    if (grupo.deudas.length > 1) {
+        setTimeout(() => {
+            const selectorEl = document.getElementById('deuda-selector');
+            if (selectorEl && selectorEl.classList.contains('hidden')) {
+                console.warn('[WARN] Selector aún tiene clase hidden, forzando visibilidad...');
+                selectorEl.classList.remove('hidden');
+                selectorEl.style.display = '';
+            }
+        }, 200);
+    } else {
+        // Si solo hay 1 deuda, asegurar que el selector esté oculto
+        setTimeout(() => {
+            const selectorEl = document.getElementById('deuda-selector');
+            if (selectorEl && !selectorEl.classList.contains('hidden')) {
+                console.log('[DEBUG] Forzando ocultación del selector (solo 1 deuda)');
+                selectorEl.classList.add('hidden');
+                selectorEl.style.display = '';
+            }
+        }, 200);
+    }
+}
+
+// Función para cargar datos de un cliente (mantener compatibilidad)
 function loadCliente(cliente, indice) {
-    clienteActual = cliente;
-    indiceClienteActual = indice;
-    clientesCarteraActual = getClientesCartera();
+    // Nota: clienteActual y deudaActual ya están establecidos en cargarGrupoCliente()
+    // Esta función solo actualiza el DOM con los datos del cliente/deuda actual
+    // 'cliente' aquí es en realidad la deuda actual (deudaActual)
+    // 'clienteActual' contiene los datos compartidos del cliente
+    
+    if (!deudaActual) {
+        console.error('[ERROR] deudaActual no está definido');
+        return;
+    }
+    
+    // Usar deudaActual para datos específicos de la deuda
+    // Usar clienteActual para datos compartidos del cliente
     
     // Actualizar encabezado
     const nameHeader = document.getElementById('client-name-header');
@@ -444,12 +668,14 @@ function loadCliente(cliente, indice) {
     const dniHeader = document.getElementById('client-dni-header');
     const numeroIdHeader = document.getElementById('client-numero-id-header');
     
-    if (nameHeader) nameHeader.textContent = cliente.nombre;
-    if (idHeader) idHeader.textContent = cliente.clienteId;
-    if (dniHeader) dniHeader.textContent = cliente.dni;
-    if (numeroIdHeader) numeroIdHeader.textContent = cliente.numeroId;
+    if (nameHeader && clienteActual) {
+        nameHeader.textContent = `${clienteActual.name || ''} ${clienteActual.lastname || ''}`.trim() || 'N/A';
+    }
+    if (idHeader) idHeader.textContent = `#${deudaActual.caseId || deudaActual.id}`;
+    if (dniHeader && clienteActual) dniHeader.textContent = clienteActual.dni || 'N/A';
+    if (numeroIdHeader) numeroIdHeader.textContent = deudaActual.numeroId || 'N/A';
     
-    // Actualizar datos del cliente
+    // Actualizar datos del cliente (usar clienteActual para datos compartidos)
     const nameEl = document.getElementById('client-name');
     const dniEl = document.getElementById('client-dni');
     const numeroIdEl = document.getElementById('client-numero-id');
@@ -458,37 +684,50 @@ function loadCliente(cliente, indice) {
     const addressEl = document.getElementById('client-address');
     const birthdateEl = document.getElementById('client-birthdate');
     
-    if (nameEl) nameEl.textContent = cliente.nombre;
-    if (dniEl) dniEl.textContent = cliente.dni;
-    if (numeroIdEl) numeroIdEl.textContent = cliente.numeroId;
-    if (phoneEl) phoneEl.innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono || 'N/A'}`;
-    if (emailEl) emailEl.innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email || 'N/A'}`;
+    if (nameEl && clienteActual) {
+        nameEl.textContent = `${clienteActual.name || ''} ${clienteActual.lastname || ''}`.trim() || 'N/A';
+    }
+    if (dniEl && clienteActual) dniEl.textContent = clienteActual.dni || 'N/A';
+    if (numeroIdEl) numeroIdEl.textContent = deudaActual.numeroId || 'N/A';
+    if (phoneEl && clienteActual) {
+        phoneEl.innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${clienteActual.telefono || 'N/A'}`;
+    }
+    if (emailEl) emailEl.innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${deudaActual.email || 'N/A'}`;
     
-    // Actualizar dirección (solo calle_nombre + calle_nro)
+    // Actualizar dirección (solo calle_nombre + calle_nro) - usar clienteActual
     const addressTextEl = document.getElementById('client-address-text');
+    let direccionCompleta = 'N/A';
+    if (clienteActual) {
+        const partes = [];
+        if (clienteActual.calle_nombre) partes.push(clienteActual.calle_nombre);
+        if (clienteActual.calle_nro) partes.push(clienteActual.calle_nro);
+        direccionCompleta = partes.join(' ') || 'N/A';
+    }
     if (addressTextEl) {
-        addressTextEl.textContent = cliente.direccion || 'N/A';
+        addressTextEl.textContent = direccionCompleta;
     } else if (addressEl) {
-        addressEl.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion || 'N/A'}`;
+        addressEl.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${direccionCompleta}`;
     }
     
-    // Actualizar localidad, provincia y CP
+    // Actualizar localidad, provincia y CP - usar clienteActual
     const localidadEl = document.getElementById('client-localidad');
     const provinciaEl = document.getElementById('client-provincia');
     const cpEl = document.getElementById('client-cp');
-    if (localidadEl) localidadEl.textContent = cliente.localidad || 'N/A';
-    if (provinciaEl) provinciaEl.textContent = cliente.provincia || 'N/A';
-    if (cpEl) cpEl.textContent = cliente.cp || 'N/A';
+    if (localidadEl && clienteActual) localidadEl.textContent = clienteActual.localidad || 'N/A';
+    if (provinciaEl && clienteActual) provinciaEl.textContent = clienteActual.provincia || 'N/A';
+    if (cpEl && clienteActual) cpEl.textContent = clienteActual.cp || 'N/A';
     
-    if (birthdateEl) birthdateEl.textContent = cliente.fechaNacimiento;
+    if (birthdateEl) birthdateEl.textContent = 'N/A'; // No está en el modelo
     
-    // Actualizar cartera
+    // Actualizar cartera - usar deudaActual (cada deuda puede tener diferente cartera)
     const carteraEl = document.getElementById('client-cartera');
     if (carteraEl) {
-        carteraEl.innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${cliente.cartera || 'Sin cartera'}`;
+        carteraEl.innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${deudaActual.cartera || 'Sin cartera'}`;
     }
     
-    // Actualizar datos de la deuda
+    // Actualizar datos de la deuda - usar deudaActual (datos específicos de esta deuda)
+    const debtNroClienteEl = document.getElementById('debt-nro-cliente');
+    const debtCarteraEl = document.getElementById('debt-cartera');
     const debtAmountEl = document.getElementById('debt-total-amount');
     const debtDueDateEl = document.getElementById('debt-due-date');
     const debtLastMgmtEl = document.getElementById('debt-last-management');
@@ -496,49 +735,59 @@ function loadCliente(cliente, indice) {
     const debtEntityEl = document.getElementById('debt-entity');
     const debtNotesEl = document.getElementById('debt-notes');
     
-    // Monto con interés aplicado (5% mensual según meses de mora)
-    if (debtAmountEl) debtAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    if (debtDueDateEl) debtDueDateEl.textContent = cliente.fechaVencimiento;
-    if (debtLastMgmtEl) debtLastMgmtEl.textContent = cliente.ultimaGestion;
-    if (debtInstallmentsEl) debtInstallmentsEl.innerHTML = `<span class="text-red-600">${cliente.cuotasPendientes}</span> / <span class="text-green-600">${cliente.cuotasPagadas}</span>`;
-    if (debtEntityEl) debtEntityEl.textContent = cliente.entidadFinanciera;
-    if (debtNotesEl) debtNotesEl.textContent = cliente.observaciones;
+    // Mostrar número de cliente y cartera de esta deuda específica
+    if (debtNroClienteEl) debtNroClienteEl.textContent = deudaActual.numeroId || 'N/A';
+    if (debtCarteraEl) debtCarteraEl.textContent = deudaActual.cartera || 'N/A';
     
-    // Actualizar resumen
+    // Monto con interés aplicado (5% mensual según meses de mora) - usar deudaActual (de esta deuda específica)
+    if (debtAmountEl) debtAmountEl.textContent = `$${deudaActual.montoAdeudado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (debtDueDateEl) debtDueDateEl.textContent = deudaActual.fechaVencimiento;
+    if (debtLastMgmtEl) debtLastMgmtEl.textContent = deudaActual.ultimaGestion;
+    if (debtInstallmentsEl) debtInstallmentsEl.innerHTML = `<span class="text-red-600">${deudaActual.cuotasPendientes}</span> / <span class="text-green-600">${deudaActual.cuotasPagadas}</span>`;
+    if (debtEntityEl) debtEntityEl.textContent = deudaActual.cartera || 'N/A';
+    if (debtNotesEl) debtNotesEl.textContent = deudaActual.observaciones;
+    
+    // Actualizar resumen - usar deudaActual
     const summaryMontoInicialEl = document.getElementById('summary-monto-inicial');
     const summaryMontoAdeudadoEl = document.getElementById('summary-monto-adeudado');
+    const summaryMontoInteresesEl = document.getElementById('summary-monto-intereses');
     const summaryDaysEl = document.getElementById('summary-days-overdue');
     
     if (summaryMontoInicialEl) {
-        summaryMontoInicialEl.textContent = `$${(cliente.montoInicial || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        summaryMontoInicialEl.textContent = `$${(deudaActual.montoInicial || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     if (summaryMontoAdeudadoEl) {
-        summaryMontoAdeudadoEl.textContent = `$${(cliente.montoBase || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        summaryMontoAdeudadoEl.textContent = `$${(deudaActual.montoBase || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    if (summaryMontoInteresesEl) {
+        // Monto con intereses (montoAdeudado ya incluye los intereses calculados)
+        summaryMontoInteresesEl.textContent = `$${(deudaActual.montoAdeudado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     
-    // Actualizar calculadora de intereses
+    // Actualizar calculadora de intereses - usar deudaActual
     const calcMontoTotalEl = document.getElementById('calc-monto-total');
     if (calcMontoTotalEl) {
         // Formatear a 2 decimales
-        const montoFormateado = (cliente.montoAdeudado || 0).toFixed(2);
+        const montoFormateado = (deudaActual.montoAdeudado || 0).toFixed(2);
         calcMontoTotalEl.value = montoFormateado;
         calcularIntereses();
     }
     if (summaryDaysEl) {
-        const meses = cliente.mesesMora || 0;
+        const meses = deudaActual.mesesMora || 0;
         summaryDaysEl.textContent = `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
     }
     
-    // Actualizar case_id en formularios - CRÍTICO: debe actualizarse siempre
+    // Actualizar case_id en formularios - CRÍTICO: debe actualizarse siempre - usar deudaActual
     const currentCaseIdEl = document.getElementById('current-case-id');
     const managementCaseIdEl = document.getElementById('management-case-id');
-    const caseIdValue = String(cliente.caseId || cliente.id || '');
+    const caseIdValue = String(deudaActual.caseId || deudaActual.id || '');
     
-    console.log(`[DEBUG] loadCliente - Cliente: ${cliente.nombre}, caseId: ${cliente.caseId}, id: ${cliente.id}, estado: ${cliente.estado}`);
+    console.log(`[DEBUG] loadCliente - Cliente: ${clienteActual ? `${clienteActual.name} ${clienteActual.lastname}` : 'N/A'}, caseId: ${deudaActual.caseId}, id: ${deudaActual.id}, estado: ${deudaActual.estado}`);
     
     if (currentCaseIdEl) {
         currentCaseIdEl.value = caseIdValue;
-        console.log(`[DEBUG] ✓ Actualizado current-case-id: "${caseIdValue}" para cliente: ${cliente.nombre}`);
+        const nombreCliente = clienteActual ? `${clienteActual.name} ${clienteActual.lastname}` : 'N/A';
+        console.log(`[DEBUG] ✓ Actualizado current-case-id: "${caseIdValue}" para cliente: ${nombreCliente}`);
     } else {
         console.error('[ERROR] ✗ No se encontró elemento current-case-id en el DOM');
     }
@@ -550,7 +799,7 @@ function loadCliente(cliente, indice) {
         console.warn('[WARN] No se encontró elemento management-case-id (puede ser normal)');
     }
     
-    // Actualizar estado del selector - debe reflejar el estado real del caso
+    // Actualizar estado del selector - debe reflejar el estado real del caso - usar deudaActual
     const statusMap = {
         'sin-gestion': { text: 'Sin Arreglo', class: 'status-sin-gestion' },
         'en-gestion': { text: 'En gestión', class: 'status-en-gestion' },
@@ -562,12 +811,12 @@ function loadCliente(cliente, indice) {
         'pagada': { text: 'Pagada', class: 'status-pagada' }
     };
     
-    const statusInfo = statusMap[cliente.estado] || statusMap['sin-gestion'];
+    const statusInfo = statusMap[deudaActual.estado] || statusMap['sin-gestion'];
     const statusSelectorEl = document.getElementById('status-selector');
     if (statusSelectorEl) {
         // Asegurar que el selector muestre el estado correcto
-        statusSelectorEl.value = cliente.estado;
-        console.log(`[DEBUG] Estado del selector actualizado a: ${cliente.estado} para caso ${cliente.caseId || cliente.id}`);
+        statusSelectorEl.value = deudaActual.estado;
+        console.log(`[DEBUG] Estado del selector actualizado a: ${deudaActual.estado} para caso ${deudaActual.caseId || deudaActual.id}`);
         
         // Remover event listener anterior si existe
         const newSelector = statusSelectorEl.cloneNode(true);
@@ -583,7 +832,7 @@ function loadCliente(cliente, indice) {
             if (!caseId) {
                 console.error('[ERROR] No hay case_id');
                 alert('Error: No se puede cambiar el estado sin un cliente seleccionado.');
-                e.target.value = cliente.estado; // Restaurar
+                e.target.value = deudaActual.estado; // Restaurar
                 return;
             }
             
@@ -605,38 +854,34 @@ function loadCliente(cliente, indice) {
                     console.log('[OK] Estado actualizado en BD');
                     updateStatusBadge(newStatus);
                     
-                    // Actualizar el clienteActual inmediatamente
-                    if (clienteActual) {
-                        clienteActual.estado = newStatus;
-                        console.log(`[DEBUG] clienteActual.estado actualizado a: ${newStatus}`);
+                    // Actualizar deudaActual inmediatamente
+                    if (deudaActual) {
+                        deudaActual.estado = newStatus;
+                        console.log(`[DEBUG] deudaActual.estado actualizado a: ${newStatus}`);
                     }
                     
-                    // Actualizar en todosLosCasos inmediatamente
-                    const caseIndex = todosLosCasos.findIndex(c => c.id === caseId);
-                    if (caseIndex !== -1) {
-                        // Actualizar status_id basado en el nuevo estado
-                        // Esto se actualizará cuando se guarde en el servidor
-                        console.log(`[DEBUG] todosLosCasos[${caseIndex}] actualizado con nuevo estado`);
+                    // Actualizar en el grupo actual
+                    if (grupoClienteActual) {
+                        const deudaIndex = grupoClienteActual.deudas.findIndex(d => d.id == caseId);
+                        if (deudaIndex !== -1) {
+                            grupoClienteActual.deudas[deudaIndex].status_nombre = newStatus;
+                            console.log(`[DEBUG] grupoClienteActual.deudas[${deudaIndex}] actualizado con nuevo estado`);
+                        }
                     }
                     
-                    // Actualizar en clientesCarteraActual inmediatamente
-                    const clienteIndex = clientesCarteraActual.findIndex(c => c.caseId == caseId);
-                    if (clienteIndex !== -1) {
-                        clientesCarteraActual[clienteIndex].estado = newStatus;
-                        console.log(`[DEBUG] clientesCarteraActual[${clienteIndex}].estado actualizado`);
-                    }
-                    
-                    // Recargar el caso para confirmar (esto actualizará los arrays de nuevo con datos frescos de la BD)
-                    setTimeout(() => reloadCurrentCase(), 500);
+                    // Recargar casos desde la API para obtener datos actualizados
+                    setTimeout(async () => {
+                        await loadCasosFromAPI();
+                    }, 500);
                 } else {
                     console.error('[ERROR] Error actualizando estado:', await response.text());
                     alert('Error al guardar el estado');
-                    e.target.value = cliente.estado; // Restaurar
+                    e.target.value = deudaActual.estado; // Restaurar
                 }
             } catch (error) {
                 console.error('[ERROR] Error en petición:', error);
                 alert('Error al guardar el estado');
-                e.target.value = cliente.estado; // Restaurar
+                e.target.value = deudaActual.estado; // Restaurar
             } finally {
                 // Ocultar loading
                 if (loadingEl) loadingEl.style.display = 'none';
@@ -645,24 +890,34 @@ function loadCliente(cliente, indice) {
     }
     updateStatusBadge(cliente.estado);
     
-    // Cargar gestiones del cliente
-    if (cliente.caseId) {
-        loadActivities(cliente.caseId);
+    // Cargar historial de gestiones
+    if (deudaActual && (deudaActual.caseId || deudaActual.id)) {
+        const caseIdToLoad = deudaActual.caseId || deudaActual.id;
+        console.log(`[DEBUG] Cargando actividades para caso ${caseIdToLoad}`);
+        loadActivities(caseIdToLoad);
+    } else {
+        console.warn('[WARN] No hay caseId para cargar actividades');
+        // Mostrar mensaje de que no hay gestiones
+        const historyContainer = document.getElementById('management-history');
+        if (historyContainer) {
+            historyContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>No hay gestiones registradas para este cliente</p>
+                </div>
+            `;
+        }
+        const summaryLastManagementEl = document.getElementById('summary-last-management');
+        if (summaryLastManagementEl) {
+            summaryLastManagementEl.textContent = 'N/A';
+        }
     }
     
-    // Actualizar contador de clientes
-    const total = clientesCarteraActual.length;
-    const actual = indice + 1;
-    const counterEl = document.getElementById('cliente-counter');
-    if (counterEl) {
-        counterEl.textContent = `Cliente ${actual} de ${total}`;
-    }
-    
-    // Actualizar estado de botones de navegación
-    const btnPrev = document.getElementById('btn-prev-cliente');
-    const btnNext = document.getElementById('btn-next-cliente');
-    if (btnPrev) btnPrev.disabled = total <= 1;
-    if (btnNext) btnNext.disabled = total <= 1;
+    // Los contadores se actualizan en actualizarContadores()
+    // Usar setTimeout para asegurar que el DOM esté actualizado
+    setTimeout(() => {
+        actualizarContadores();
+    }, 50);
     
     // Recargar iconos
     setTimeout(() => {
@@ -700,6 +955,7 @@ window.toggleCarteraDropdown = function() {
 
 // Función para seleccionar una cartera desde el dropdown
 // Función para seleccionar cartera (GLOBAL - usada por onclick en HTML)
+// Función para seleccionar cartera (GLOBAL - usada por onclick en HTML)
 window.selectCartera = function(carteraId, displayText) {
     changeCartera(carteraId);
     toggleCarteraDropdown(); // Cerrar el dropdown
@@ -728,48 +984,49 @@ window.updateStatusBadge = function(status) {
 
 // Función para recargar el caso actual desde la API (definida globalmente)
 async function reloadCurrentCase() {
-    if (!clienteActual || !clienteActual.caseId) {
-        console.log('[WARN] No hay caso seleccionado para recargar');
+    if (!deudaActual || !deudaActual.caseId) {
+        console.log('[WARN] No hay deuda seleccionada para recargar');
         return;
     }
     
     try {
-        const response = await fetch(`/api/cases/${clienteActual.caseId}`);
+        const response = await fetch(`/api/cases/${deudaActual.caseId}`);
         const result = await response.json();
         
         if (result.success) {
-            // Actualizar el caso en todosLosCasos (array en memoria)
-            const caseIndex = todosLosCasos.findIndex(c => c.id === result.data.id);
-            if (caseIndex !== -1) {
-                todosLosCasos[caseIndex] = result.data;
-                console.log(`[DEBUG] Actualizado caso en todosLosCasos[${caseIndex}]`);
-            }
-            
-            // Actualizar el cliente actual con datos frescos
-            const updatedCliente = mapCaseToCliente(result.data);
-            clienteActual = updatedCliente;
-            
-            // Actualizar también en clientesCarteraActual
-            const clienteIndex = clientesCarteraActual.findIndex(c => c.caseId === updatedCliente.caseId);
-            if (clienteIndex !== -1) {
-                clientesCarteraActual[clienteIndex] = updatedCliente;
-                console.log(`[DEBUG] Actualizado cliente en clientesCarteraActual[${clienteIndex}]`);
+            // Actualizar la deuda en el grupo actual
+            if (grupoClienteActual) {
+                const deudaIndex = grupoClienteActual.deudas.findIndex(d => d.id === result.data.id);
+                if (deudaIndex !== -1) {
+                    grupoClienteActual.deudas[deudaIndex] = result.data;
+                    console.log(`[DEBUG] Actualizado deuda en grupoClienteActual.deudas[${deudaIndex}]`);
+                    
+                    // Actualizar deudaActual con datos frescos
+                    deudaActual = mapCaseToCliente(result.data);
+                    
+                    // Recargar la vista
+                    loadCliente(deudaActual, indiceGrupoActual);
+                }
             }
             
             // Actualizar el selector de estado
             const statusSelector = document.getElementById('status-selector');
-            if (statusSelector) {
-                statusSelector.value = updatedCliente.estado;
+            if (statusSelector && deudaActual) {
+                statusSelector.value = deudaActual.estado;
             }
-            updateStatusBadge(updatedCliente.estado);
+            if (deudaActual) {
+                updateStatusBadge(deudaActual.estado);
+            }
             
             // Actualizar case_id en formularios
             const currentCaseIdEl = document.getElementById('current-case-id');
             const managementCaseIdEl = document.getElementById('management-case-id');
-            if (currentCaseIdEl) currentCaseIdEl.value = updatedCliente.caseId || '';
-            if (managementCaseIdEl) managementCaseIdEl.value = updatedCliente.caseId || '';
+            if (currentCaseIdEl && deudaActual) currentCaseIdEl.value = deudaActual.caseId || '';
+            if (managementCaseIdEl && deudaActual) managementCaseIdEl.value = deudaActual.caseId || '';
             
-            console.log(`[OK] Caso ${updatedCliente.caseId} recargado y actualizado en memoria, estado: ${updatedCliente.estado}`);
+            if (deudaActual) {
+                console.log(`[OK] Deuda ${deudaActual.caseId} recargada y actualizada en memoria, estado: ${deudaActual.estado}`);
+            }
         }
     } catch (error) {
         console.error('[ERROR] Error recargando caso:', error);
@@ -856,27 +1113,48 @@ async function loadActivities(caseId) {
             }
             
             // Actualizar "Última Gestión" en el resumen con la gestión más reciente
-            const lastActivity = activities[0]; // Ya están ordenadas por fecha descendente
-            const lastDate = new Date(lastActivity.created_at);
-            const now = new Date();
-            const diffTime = Math.abs(now - lastDate);
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            
-            let ultimaGestionTexto = 'N/A';
-            if (diffDays === 0) {
-                ultimaGestionTexto = 'Hoy';
-            } else if (diffDays === 1) {
-                ultimaGestionTexto = 'Hace 1 día';
+            if (activities.length > 0) {
+                const lastActivity = activities[0]; // Ya están ordenadas por fecha descendente
+                const lastDate = new Date(lastActivity.created_at);
+                const now = new Date();
+                const diffTime = Math.abs(now - lastDate);
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                
+                let ultimaGestionTexto = 'N/A';
+                if (diffDays === 0) {
+                    ultimaGestionTexto = 'Hoy';
+                } else if (diffDays === 1) {
+                    ultimaGestionTexto = 'Hace 1 día';
+                } else {
+                    ultimaGestionTexto = `Hace ${diffDays} días`;
+                }
+                
+                const summaryLastManagementEl = document.getElementById('summary-last-management');
+                if (summaryLastManagementEl) {
+                    summaryLastManagementEl.textContent = ultimaGestionTexto;
+                    console.log(`[DEBUG] Última gestión actualizada: ${ultimaGestionTexto}`);
+                }
             } else {
-                ultimaGestionTexto = `Hace ${diffDays} días`;
-            }
-            
-            const summaryLastManagementEl = document.getElementById('summary-last-management');
-            if (summaryLastManagementEl) {
-                summaryLastManagementEl.textContent = ultimaGestionTexto;
+                // No hay gestiones, mostrar "N/A"
+                const summaryLastManagementEl = document.getElementById('summary-last-management');
+                if (summaryLastManagementEl) {
+                    summaryLastManagementEl.textContent = 'N/A';
+                }
             }
         } else {
             console.error('[ERROR] Error cargando gestiones:', result.error);
+            const historyContainer = document.getElementById('management-history');
+            if (historyContainer) {
+                historyContainer.innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Error al cargar gestiones: ${result.error || 'Error desconocido'}</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            }
             // Si hay error, mostrar "N/A"
             const summaryLastManagementEl = document.getElementById('summary-last-management');
             if (summaryLastManagementEl) {
@@ -885,6 +1163,18 @@ async function loadActivities(caseId) {
         }
     } catch (error) {
         console.error('[ERROR] Error en loadActivities:', error);
+        const historyContainer = document.getElementById('management-history');
+        if (historyContainer) {
+            historyContainer.innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>Error al cargar gestiones: ${error.message || 'Error desconocido'}</p>
+                </div>
+            `;
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
         // Si hay error, mostrar "N/A"
         const summaryLastManagementEl = document.getElementById('summary-last-management');
         if (summaryLastManagementEl) {
@@ -987,10 +1277,213 @@ function showErrorMessage(message) {
 }
 
 // Función para actualizar contador total
+// Función para actualizar contadores de cliente y deuda
+function actualizarContadores() {
+    if (!grupoClienteActual) {
+        console.log('[DEBUG] actualizarContadores: grupoClienteActual es null');
+        return;
+    }
+    
+    console.log(`[DEBUG] actualizarContadores: grupoClienteActual tiene ${grupoClienteActual.deudas?.length || 0} deudas`);
+    
+    // Contador de clientes
+    const totalClientes = gruposCarteraActual.length;
+    const clienteNum = indiceGrupoActual + 1;
+    const clienteCounterEl = document.getElementById('cliente-counter');
+    if (clienteCounterEl) {
+        clienteCounterEl.textContent = `Cliente ${clienteNum} de ${totalClientes}`;
+    }
+    
+    // Contador de deudas (solo si hay múltiples)
+    const totalDeudas = grupoClienteActual.deudas?.length || 0;
+    const deudaNum = indiceDeudaActual + 1;
+    const deudaCounterEl = document.getElementById('deuda-counter');
+    const deudaSelectorEl = document.getElementById('deuda-selector');
+    const btnPrevDeuda = document.getElementById('btn-prev-deuda');
+    const btnNextDeuda = document.getElementById('btn-next-deuda');
+    
+    console.log(`[DEBUG] actualizarContadores: totalDeudas = ${totalDeudas}, deudaNum = ${deudaNum}, indiceDeudaActual = ${indiceDeudaActual}`);
+    
+    // Verificación explícita: si totalDeudas === 1, ocultar el selector inmediatamente
+    if (totalDeudas === 1) {
+        console.log('[DEBUG] totalDeudas === 1, ocultando selector de deudas');
+        if (deudaSelectorEl) {
+            deudaSelectorEl.classList.add('hidden');
+            deudaSelectorEl.style.display = 'none'; // Forzar ocultación
+            console.log('[DEBUG] Selector ocultado: clase hidden + display none');
+        } else {
+            console.error('[ERROR] No se encontró deuda-selector para ocultar');
+        }
+        if (btnPrevDeuda) {
+            btnPrevDeuda.disabled = true;
+        }
+        if (btnNextDeuda) {
+            btnNextDeuda.disabled = true;
+        }
+        // Ocultar otros elementos relacionados
+        const multiDeudaBadge = document.getElementById('multi-deuda-badge');
+        if (multiDeudaBadge) multiDeudaBadge.classList.add('hidden');
+        
+        // Ocultar resumen consolidado si totalDeudas === 1
+        const resumenConsolidado = document.getElementById('resumen-consolidado');
+        if (resumenConsolidado) {
+            resumenConsolidado.classList.add('hidden');
+            resumenConsolidado.style.display = 'none'; // Forzar ocultación
+            console.log('[DEBUG] Resumen consolidado ocultado (totalDeudas === 1)');
+        } else {
+            console.warn('[WARN] No se encontró resumen-consolidado para ocultar');
+        }
+        
+        const deudaCurrentBadge = document.getElementById('deuda-current-badge');
+        if (deudaCurrentBadge) deudaCurrentBadge.classList.add('hidden');
+        return; // Salir temprano si solo hay 1 deuda
+    }
+    
+    // Si totalDeudas > 1, mostrar el selector
+    if (totalDeudas > 1) {
+        console.log('[DEBUG] Mostrando selector de deudas');
+        // Mostrar selector de deuda
+        if (deudaCounterEl) {
+            deudaCounterEl.textContent = `${deudaNum} de ${totalDeudas}`;
+            console.log(`[DEBUG] Contador actualizado: ${deudaNum} de ${totalDeudas}`);
+        } else {
+            console.error('[ERROR] No se encontró el elemento deuda-counter en el DOM');
+        }
+        
+        if (deudaSelectorEl) {
+            // Remover clase hidden
+            deudaSelectorEl.classList.remove('hidden');
+            // Remover cualquier estilo inline que pueda estar interfiriendo
+            deudaSelectorEl.style.display = '';
+            console.log('[DEBUG] Clase "hidden" removida del selector de deudas');
+            console.log('[DEBUG] Estilos aplicados:', {
+                display: deudaSelectorEl.style.display || 'flex (por clase Tailwind)',
+                classList: Array.from(deudaSelectorEl.classList),
+                computedDisplay: window.getComputedStyle(deudaSelectorEl).display
+            });
+        } else {
+            console.error('[ERROR] No se encontró el elemento deuda-selector en el DOM');
+            console.error('[ERROR] Intentando buscar de nuevo...');
+            // Intentar buscar de nuevo después de un pequeño delay
+            setTimeout(() => {
+                const retryEl = document.getElementById('deuda-selector');
+                if (retryEl) {
+                    console.log('[DEBUG] Elemento encontrado en segundo intento');
+                    retryEl.classList.remove('hidden');
+                    retryEl.style.display = '';
+                } else {
+                    console.error('[ERROR] Elemento aún no encontrado después del delay');
+                }
+            }, 100);
+        }
+        // Habilitar/deshabilitar botones según posición
+        if (btnPrevDeuda) {
+            btnPrevDeuda.disabled = (indiceDeudaActual === 0);
+            console.log(`[DEBUG] btn-prev-deuda disabled: ${btnPrevDeuda.disabled}`);
+        }
+        if (btnNextDeuda) {
+            btnNextDeuda.disabled = (indiceDeudaActual >= totalDeudas - 1);
+            console.log(`[DEBUG] btn-next-deuda disabled: ${btnNextDeuda.disabled}`);
+        }
+        
+        // Actualizar badge de múltiples deudas
+        const multiDeudaBadge = document.getElementById('multi-deuda-badge');
+        const deudaCountBadge = document.getElementById('deuda-count-badge');
+        if (multiDeudaBadge) multiDeudaBadge.classList.remove('hidden');
+        if (deudaCountBadge) deudaCountBadge.textContent = `${totalDeudas} deudas`;
+        
+        // Mostrar indicador en la tarjeta de deuda
+        const deudaIndicator = document.getElementById('deuda-indicator');
+        const deudaIndicatorText = document.getElementById('deuda-indicator-text');
+        if (deudaIndicator) deudaIndicator.classList.remove('hidden');
+        if (deudaIndicatorText) deudaIndicatorText.textContent = `Deuda ${deudaNum} de ${totalDeudas}`;
+        
+        // Mostrar badge en el resumen
+        const deudaActualBadge = document.getElementById('deuda-actual-badge');
+        const deudaActualNum = document.getElementById('deuda-actual-num');
+        const deudaActualTotal = document.getElementById('deuda-actual-total');
+        if (deudaActualBadge) deudaActualBadge.classList.remove('hidden');
+        if (deudaActualNum) deudaActualNum.textContent = deudaNum;
+        if (deudaActualTotal) deudaActualTotal.textContent = totalDeudas;
+        
+        // Mostrar resumen consolidado
+        const resumenConsolidado = document.getElementById('resumen-consolidado');
+        const consolidadoTotalDeudas = document.getElementById('consolidado-total-deudas');
+        const consolidadoMontoInicial = document.getElementById('consolidado-monto-inicial');
+        const consolidadoMontoAdeudado = document.getElementById('consolidado-monto-adeudado');
+        
+        if (resumenConsolidado) {
+            resumenConsolidado.classList.remove('hidden');
+            resumenConsolidado.style.display = ''; // Remover cualquier display: none
+            console.log('[DEBUG] Resumen consolidado mostrado (totalDeudas > 1)');
+        }
+        if (consolidadoTotalDeudas) consolidadoTotalDeudas.textContent = totalDeudas;
+        if (consolidadoMontoInicial) {
+            consolidadoMontoInicial.textContent = `$${(grupoClienteActual.monto_inicial_total || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+        if (consolidadoMontoAdeudado) {
+            consolidadoMontoAdeudado.textContent = `$${(grupoClienteActual.deuda_consolidada || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+    } else {
+        console.log('[DEBUG] Ocultando selector de deudas (solo 1 deuda o ninguna)');
+        // Ocultar selector si solo hay una deuda
+        if (deudaSelectorEl) {
+            deudaSelectorEl.classList.add('hidden');
+            // Remover cualquier estilo inline que pueda estar interfiriendo
+            deudaSelectorEl.style.display = '';
+            console.log('[DEBUG] Selector de deudas ocultado (clase hidden agregada)');
+            console.log('[DEBUG] Estado del selector:', {
+                classList: Array.from(deudaSelectorEl.classList),
+                computedDisplay: window.getComputedStyle(deudaSelectorEl).display
+            });
+        } else {
+            console.warn('[WARN] No se encontró el elemento deuda-selector para ocultar');
+        }
+        if (btnPrevDeuda) {
+            btnPrevDeuda.disabled = true;
+        }
+        if (btnNextDeuda) {
+            btnNextDeuda.disabled = true;
+        }
+        
+        // Ocultar badge
+        const multiDeudaBadge = document.getElementById('multi-deuda-badge');
+        if (multiDeudaBadge) multiDeudaBadge.classList.add('hidden');
+        
+        // Ocultar indicador en la tarjeta de deuda
+        const deudaIndicator = document.getElementById('deuda-indicator');
+        if (deudaIndicator) deudaIndicator.classList.add('hidden');
+        
+        // Ocultar badge en el resumen
+        const deudaActualBadge = document.getElementById('deuda-actual-badge');
+        if (deudaActualBadge) deudaActualBadge.classList.add('hidden');
+        
+        // Ocultar resumen consolidado
+        const resumenConsolidado = document.getElementById('resumen-consolidado');
+        if (resumenConsolidado) resumenConsolidado.classList.add('hidden');
+    }
+}
+
+// Función para actualizar selector de deudas
+function actualizarSelectorDeudas(grupo) {
+    // Esta función se llama desde cargarGrupoCliente
+    // Asegurar que grupoClienteActual esté establecido
+    if (!grupoClienteActual && grupo) {
+        grupoClienteActual = grupo;
+        console.log('[DEBUG] actualizarSelectorDeudas: grupoClienteActual establecido desde parámetro');
+    }
+    // Los contadores se actualizan en actualizarContadores()
+    // Usar setTimeout para asegurar que el DOM esté listo
+    setTimeout(() => {
+        actualizarContadores();
+    }, 50);
+}
+
 function updateTotalCounter() {
-    const total = todosLosCasos.length;
+    const totalGrupos = todosLosGrupos.length;
+    const totalDeudas = todosLosGrupos.reduce((sum, grupo) => sum + grupo.total_deudas, 0);
     // Actualizar algún elemento del DOM si existe
-    console.log(`Total de casos: ${total}`);
+    console.log(`Total de grupos (clientes): ${totalGrupos}, Total de deudas: ${totalDeudas}`);
 }
 
 // Ya no necesitamos este listener porque lo manejamos en el DOMContentLoaded
@@ -1009,8 +1502,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 form.reset();
                 // Mantener el case_id en el formulario
                 const managementCaseIdEl = document.getElementById('management-case-id');
-                if (managementCaseIdEl && clienteActual && clienteActual.caseId) {
-                    managementCaseIdEl.value = clienteActual.caseId;
+                if (managementCaseIdEl && deudaActual && deudaActual.caseId) {
+                    managementCaseIdEl.value = deudaActual.caseId;
                 }
             }
             
@@ -1100,9 +1593,10 @@ window.calcularIntereses = function() {
         return;
     }
     
-    // Calcular total a abonar: monto * (1 + interés/100) ^ cantidad_cuotas
+    // Calcular total a abonar con interés simple: monto * (1 + interés/100 * cantidad_cuotas)
+    // NOTA: Esta calculadora usa interés simple por cuota
     const interesDecimal = interesMensual / 100;
-    const totalAbonar = montoTotal * Math.pow(1 + interesDecimal, cantidadCuotas);
+    const totalAbonar = montoTotal * (1 + interesDecimal * cantidadCuotas);
     
     // Calcular monto por cuota
     const montoCuota = totalAbonar / cantidadCuotas;

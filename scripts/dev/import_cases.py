@@ -106,24 +106,77 @@ CASES_DATA = [
         'total': '306120.00',
         'fecha_ultimo_pago': '10/6/2024',
         'telefono': '2914752382'
+    },
+    # Casos duplicados (mismo DNI, diferente nro_cliente)
+    {
+        'nro_cliente': '347337',
+        'dni': '20737173',
+        'calle_nombre': '75',
+        'calle_nro': '1675',
+        'localidad': 'NECOCHEA',
+        'provincia': 'BUENOS AIRES',
+        'cp': '7630',
+        'name': 'CAROLINA',
+        'lastname': 'ALDABE',
+        'monto_inicial': '400000.00',
+        'total': '979592.00',
+        'fecha_ultimo_pago': '10/5/2024',
+        'telefono': '2262474992'
+    },
+    {
+        'nro_cliente': '348460',
+        'dni': '92452887',
+        'calle_nombre': 'MONTEVIDEO',
+        'calle_nro': '555',
+        'localidad': 'BAHIA BLANCA',
+        'provincia': 'BUENOS AIRES',
+        'cp': '8000',
+        'name': 'RUBEN ALBERTO',
+        'lastname': 'GARCES SALAZAR',
+        'monto_inicial': '500000.00',
+        'total': '1475804.00',
+        'fecha_ultimo_pago': '10/6/2024',
+        'telefono': '2914752382'
     }
 ]
 
 
 def parse_date(date_str):
-    """Parsea fecha en formato MM/DD/YYYY."""
-    try:
-        return datetime.strptime(date_str, '%m/%d/%Y').date()
-    except:
+    """Parsea fecha en formato DD/MM/YYYY o MM/DD/YYYY."""
+    if not date_str:
         return None
+    try:
+        # Intentar formato DD/MM/YYYY primero (más común en Argentina)
+        return datetime.strptime(date_str, '%d/%m/%Y').date()
+    except ValueError:
+        try:
+            # Intentar formato MM/DD/YYYY
+            return datetime.strptime(date_str, '%m/%d/%Y').date()
+        except ValueError:
+            return None
 
 
 def parse_amount(amount_str):
     """Parsea monto removiendo símbolos de moneda y espacios."""
     if not amount_str:
         return None
-    # Remover $, espacios y comas
-    cleaned = amount_str.replace('$', '').replace(',', '').replace(' ', '').strip()
+    # Remover $, espacios, comas y puntos de miles
+    # Formato puede ser: "$  400,000.00" o "400000.00"
+    cleaned = amount_str.replace('$', '').replace(' ', '').strip()
+    # Si tiene comas, asumir formato con punto decimal: "400,000.00" -> "400000.00"
+    if ',' in cleaned and '.' in cleaned:
+        # Formato: "400,000.00" -> quitar comas
+        cleaned = cleaned.replace(',', '')
+    elif ',' in cleaned:
+        # Formato: "400,000" -> podría ser miles o decimales
+        # Si hay más de 3 dígitos después de la coma, es decimal (formato europeo)
+        parts = cleaned.split(',')
+        if len(parts) == 2 and len(parts[1]) <= 2:
+            # Es decimal con coma: "400,50" -> "400.50"
+            cleaned = parts[0] + '.' + parts[1]
+        else:
+            # Es miles: "400,000" -> "400000"
+            cleaned = cleaned.replace(',', '')
     try:
         return Decimal(cleaned)
     except:
@@ -162,7 +215,7 @@ def import_cases():
             # Verificar si el caso ya existe por nro_cliente
             existing = Case.query.filter_by(nro_cliente=case_data['nro_cliente']).first()
             if existing:
-                print(f"⚠️  Caso {case_data['nro_cliente']} ya existe, saltando...")
+                print(f"[SKIP] Caso {case_data['nro_cliente']} ya existe, saltando...")
                 skipped += 1
                 continue
             
@@ -192,10 +245,10 @@ def import_cases():
             
             db.session.add(case)
             imported += 1
-            print(f"✅ Caso {case_data['nro_cliente']} - {case_data['name']} {case_data['lastname']} agregado")
+            print(f"[OK] Caso {case_data['nro_cliente']} - {case_data['name']} {case_data['lastname']} agregado")
         
         db.session.commit()
-        print(f"\n✅ Importación completada: {imported} casos importados, {skipped} saltados")
+        print(f"\n[OK] Importacion completada: {imported} casos importados, {skipped} saltados")
 
 
 if __name__ == '__main__':

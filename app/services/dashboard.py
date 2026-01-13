@@ -319,3 +319,160 @@ def get_comparison_data() -> Dict:
             "gestiones_realizadas": previous_activities,
         },
     }
+
+
+@cache_result(timeout=600, key_prefix="clientes_multiples_deudas")
+def get_clientes_con_multiples_deudas(
+    cartera_id: Optional[int] = None,
+    gestor_id: Optional[int] = None,
+) -> List[Dict]:
+    """
+    Obtiene clientes (por DNI) que tienen más de una deuda usando SQL GROUP BY.
+    Optimizado para grandes volúmenes de datos.
+
+    Args:
+        cartera_id: Filtro opcional por cartera
+        gestor_id: Filtro opcional por gestor
+
+    Returns:
+        Lista de diccionarios con información consolidada por DNI
+    """
+    # Construir query base con GROUP BY
+    query = db.session.query(
+        Case.dni,
+        func.count(Case.id).label('total_deudas'),
+        func.sum(Case.total).label('deuda_consolidada'),
+        func.max(Case.fecha_ultimo_pago).label('fecha_mas_reciente'),
+        func.min(Case.created_at).label('primera_deuda'),
+        func.max(Case.created_at).label('ultima_deuda'),
+        func.sum(Case.monto_inicial).label('monto_inicial_total'),
+    ).filter(
+        Case.dni.isnot(None)  # Excluir casos sin DNI
+    )
+    
+    # Aplicar filtros
+    if cartera_id:
+        query = query.filter(Case.cartera_id == cartera_id)
+    if gestor_id:
+        query = query.filter(Case.assigned_to_id == gestor_id)
+    
+    # Agrupar por DNI y filtrar solo los que tienen más de una deuda
+    result = query.group_by(
+        Case.dni
+    ).having(
+        func.count(Case.id) > 1
+    ).order_by(
+        func.sum(Case.total).desc()
+    ).all()
+    
+    return [
+        {
+            'dni': r.dni,
+            'total_deudas': r.total_deudas,
+            'deuda_consolidada': float(r.deuda_consolidada) if r.deuda_consolidada else 0.0,
+            'monto_inicial_total': float(r.monto_inicial_total) if r.monto_inicial_total else 0.0,
+            'fecha_mas_reciente': r.fecha_mas_reciente.isoformat() if r.fecha_mas_reciente else None,
+            'primera_deuda': r.primera_deuda.isoformat() if r.primera_deuda else None,
+            'ultima_deuda': r.ultima_deuda.isoformat() if r.ultima_deuda else None,
+        }
+        for r in result
+    ]
+
+
+def get_casos_agrupados_por_dni(
+    cartera_id: Optional[int] = None,
+    gestor_id: Optional[int] = None,
+    include_relations: bool = False,
+) -> List[Dict]:
+    """
+    Obtiene casos agrupados por DNI para el frontend.
+    Cada grupo contiene los datos del cliente y todas sus deudas.
+    
+    IMPORTANTE: Si se filtra por cartera_id, se muestran TODAS las deudas del cliente,
+    pero solo se retornan grupos que tengan al menos una deuda en esa cartera.
+
+    Args:
+        cartera_id: Filtro opcional por cartera (solo filtra qué grupos mostrar, no las deudas dentro)
+        gestor_id: Filtro opcional por gestor
+        include_relations: Si incluir relaciones (promises, activities)
+
+    Returns:
+        Lista de grupos, cada uno con dni, cliente y deudas
+    """
+    # Obtener TODOS los casos (sin filtrar por gestor ni cartera)
+    # Esto es necesario para agrupar TODAS las deudas de cada cliente
+    # Luego filtraremos qué grupos mostrar, pero mantendremos todas las deudas dentro de cada grupo
+    query = Case.query
+    todos_los_casos = query.order_by(Case.created_at.desc()).all()
+    
+    # Agrupar por DNI (incluyendo TODAS las deudas de cada cliente)
+    grupos = {}
+    for caso in todos_los_casos:
+        dni = caso.dni or f"SIN-DNI-{caso.id}"
+        
+        if dni not in grupos:
+            # Crear grupo nuevo con datos del cliente (del primer caso encontrado)
+            grupos[dni] = {
+                "dni": caso.dni,
+                "cliente": {
+                    "name": caso.name,
+                    "lastname": caso.lastname,
+                    "dni": caso.dni,
+                    "telefono": caso.telefono,
+                    "calle_nombre": caso.calle_nombre,
+                    "calle_nro": caso.calle_nro,
+                    "localidad": caso.localidad,
+                    "provincia": caso.provincia,
+                    "cp": caso.cp,
+                },
+                "deudas": [],
+                "total_deudas": 0,
+                "deuda_consolidada": 0.0,
+                "monto_inicial_total": 0.0,
+            }
+        
+        # Agregar esta deuda al grupo (TODAS las deudas, sin filtrar por cartera)
+        deuda_dict = caso.to_dict(include_relations=include_relations)
+        grupos[dni]["deudas"].append(deuda_dict)
+        
+        # Actualizar totales
+        grupos[dni]["total_deudas"] += 1
+        grupos[dni]["deuda_consolidada"] += float(caso.total) if caso.total else 0.0
+        grupos[dni]["monto_inicial_total"] += float(caso.monto_inicial) if caso.monto_inicial else 0.0
+    
+    # Ordenar deudas dentro de cada grupo por fecha (más reciente primero)
+    for grupo in grupos.values():
+        grupo["deudas"].sort(
+            key=lambda d: d.get("created_at") or d.get("id", 0) or "", 
+            reverse=True
+        )
+    
+    # Aplicar filtros para determinar qué grupos mostrar
+    # Pero mantener TODAS las deudas dentro de cada grupo
+    grupos_filtrados = []
+    for grupo in grupos.values():
+        # Verificar si el grupo cumple con los filtros
+        cumple_filtros = True
+        
+        # Filtro por cartera: el grupo debe tener al menos una deuda en esa cartera
+        if cartera_id:
+            tiene_deuda_en_cartera = any(
+                deuda.get("cartera_id") == cartera_id 
+                for deuda in grupo["deudas"]
+            )
+            if not tiene_deuda_en_cartera:
+                cumple_filtros = False
+        
+        # Filtro por gestor: el grupo debe tener al menos una deuda asignada a ese gestor
+        if gestor_id and cumple_filtros:
+            tiene_deuda_asignada = any(
+                deuda.get("assigned_to_id") == gestor_id 
+                for deuda in grupo["deudas"]
+            )
+            if not tiene_deuda_asignada:
+                cumple_filtros = False
+        
+        if cumple_filtros:
+            grupos_filtrados.append(grupo)
+    
+    return grupos_filtrados

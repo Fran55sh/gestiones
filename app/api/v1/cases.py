@@ -19,6 +19,8 @@ from ...services.dashboard import (
     get_gestores_ranking,
     get_cases_status_distribution,
     get_comparison_data,
+    get_clientes_con_multiples_deudas,
+    get_casos_agrupados_por_dni,
 )
 from ...utils.security import require_role
 from ...utils.exceptions import ValidationError
@@ -839,4 +841,65 @@ def register_management():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Error registrando gestión: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/cases/multiples-deudas")
+@require_role("admin")
+def get_casos_multiples_deudas():
+    """
+    Obtiene clientes con múltiples deudas agrupados por DNI.
+    Usa SQL GROUP BY para eficiencia. Útil para reportes y dashboard admin.
+    """
+    try:
+        cartera_id = request.args.get("cartera_id", type=int)
+        gestor_id = request.args.get("gestor_id", type=int)
+        
+        clientes = get_clientes_con_multiples_deudas(
+            cartera_id=cartera_id,
+            gestor_id=gestor_id
+        )
+        
+        return jsonify({
+            "success": True,
+            "data": clientes,
+            "total": len(clientes)
+        })
+    except Exception as e:
+        app.logger.error(f"Error obteniendo clientes con múltiples deudas: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/cases/gestor/agrupados")
+def get_gestor_cases_agrupados():
+    """
+    Obtiene casos del gestor agrupados por DNI.
+    Retorna estructura: [{ dni, cliente, deudas[], total_deudas, deuda_consolidada }]
+    """
+    try:
+        user_id = session.get("user_id")
+        user_role = session.get("role")
+        
+        if not user_id:
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
+        
+        # Filtros opcionales
+        cartera_id = request.args.get("cartera_id", type=int)
+        include_relations = request.args.get("include_relations", "false").lower() == "true"
+        
+        # Obtener casos agrupados por DNI
+        grupos = get_casos_agrupados_por_dni(
+            cartera_id=cartera_id,
+            gestor_id=user_id if user_role == "gestor" else None,
+            include_relations=include_relations
+        )
+        
+        return jsonify({
+            "success": True,
+            "data": grupos,
+            "total_grupos": len(grupos),
+            "total_deudas": sum(g["total_deudas"] for g in grupos)
+        })
+    except Exception as e:
+        app.logger.error(f"Error obteniendo casos agrupados: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

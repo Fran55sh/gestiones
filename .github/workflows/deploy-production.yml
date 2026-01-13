@@ -110,9 +110,31 @@ jobs:
           echo "🚀 Starting containers..."
           docker-compose -f config/docker/docker-compose.prod.yml up -d
           
-          # Wait for container to be healthy
-          echo "⏳ Waiting for container to start..."
-          sleep 15
+          # Wait for container and database to be ready
+          echo "⏳ Waiting for services to start..."
+          sleep 20
+          
+          # Wait for PostgreSQL to be ready
+          echo "⏳ Waiting for PostgreSQL..."
+          until docker exec gestiones-db-prod pg_isready -U gestiones_user -d gestiones > /dev/null 2>&1; do
+            echo "Waiting for database..."
+            sleep 2
+          done
+          
+          # Run database migrations
+          echo "🔄 Running database migrations..."
+          docker exec gestiones-mvp-prod alembic -c config/alembic.ini upgrade head || echo "⚠️ Migration warning (may already be up to date)"
+          
+          # Initialize default data if needed
+          echo "📦 Initializing default data..."
+          docker exec gestiones-mvp-prod python3 << 'PYTHON'
+from app import create_app
+from app.core.database import db
+app = create_app()
+with app.app_context():
+    db.create_all()
+    print("✅ Default data initialized")
+PYTHON
           
           # Show container status
           echo "📊 Container status:"

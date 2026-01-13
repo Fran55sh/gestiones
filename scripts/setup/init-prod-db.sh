@@ -12,8 +12,13 @@ done
 
 echo "✅ PostgreSQL is ready!"
 
-# Create database tables using Flask-SQLAlchemy
-echo "📊 Creating database tables..."
+# Run Alembic migrations
+echo "🔄 Running database migrations..."
+docker exec gestiones-mvp-prod alembic -c config/alembic.ini upgrade head
+echo "✅ Migrations completed!"
+
+# Create default data (carteras, case_statuses, users)
+echo "📦 Creating default data (carteras, estados, usuarios)..."
 docker exec gestiones-mvp-prod python3 << 'PYTHON_SCRIPT'
 from app import create_app
 from app.core.database import db
@@ -21,18 +26,20 @@ from app.core.database import db
 app = create_app()
 
 with app.app_context():
-    # Create all tables
+    # This will create default carteras, case_statuses, and users
+    # if they don't exist (handled in app/__init__.py)
     db.create_all()
-    print("✅ Database tables created successfully!")
+    print("✅ Default data created!")
 PYTHON_SCRIPT
-
-# Populate with sample data
-echo "📦 Populating database with sample data..."
-docker exec gestiones-mvp-prod python3 scripts/dev/create_sample_data.py
 
 echo ""
 echo "🎉 Production database initialized successfully!"
-echo "✅ Tables created"
-echo "✅ Sample data loaded"
+echo "✅ Migrations applied"
+echo "✅ Default data created"
+echo ""
+echo "📝 Next steps:"
+echo "   1. If you have data from develop, run:"
+echo "      docker exec gestiones-mvp-prod python3 scripts/prod/import_data_to_prod.py"
+echo "   2. Verify the database is working correctly"
 echo ""
 
