@@ -48,15 +48,27 @@ def upgrade() -> None:
         {'id': 7, 'nombre': 'De baja', 'activo': True, 'created_at': datetime.utcnow()},
     ]
     
-    # For SQLite, use INSERT OR IGNORE
-    for status in statuses:
-        connection.execute(
-            text("""
-                INSERT OR IGNORE INTO case_statuses (id, nombre, activo, created_at)
-                VALUES (:id, :nombre, :activo, :created_at)
-            """),
-            status
-        )
+    # Use ON CONFLICT DO NOTHING for PostgreSQL, INSERT OR IGNORE for SQLite
+    if connection.dialect.name == 'postgresql':
+        for status in statuses:
+            connection.execute(
+                text("""
+                    INSERT INTO case_statuses (id, nombre, activo, created_at)
+                    VALUES (:id, :nombre, :activo, :created_at)
+                    ON CONFLICT (id) DO NOTHING
+                """),
+                status
+            )
+    else:
+        # SQLite
+        for status in statuses:
+            connection.execute(
+                text("""
+                    INSERT OR IGNORE INTO case_statuses (id, nombre, activo, created_at)
+                    VALUES (:id, :nombre, :activo, :created_at)
+                """),
+                status
+            )
 
     # Step 2: Drop old cases table (this will cascade delete foreign keys from promises and activities)
     # First, drop foreign key constraints from promises and activities
