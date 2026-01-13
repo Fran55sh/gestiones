@@ -8,9 +8,10 @@ from flask import current_app as app
 from sqlalchemy import or_
 
 from ...core.database import db
-from ...features.cases.models import Case
+from ...features.cases.models import Case, CaseStatus
 from ...features.cases.promise import Promise
 from ...features.activities.models import Activity
+from ...features.carteras.models import Cartera
 from ...services.dashboard import (
     get_kpis,
     get_performance_chart_data,
@@ -45,10 +46,10 @@ def dashboard_kpis():
     try:
         start_date = _parse_date(request.args.get("start_date"))
         end_date = _parse_date(request.args.get("end_date"))
-        cartera = request.args.get("cartera")
+        cartera_id = request.args.get("cartera_id", type=int)
         gestor_id = request.args.get("gestor_id", type=int)
 
-        kpis = get_kpis(start_date, end_date, cartera, gestor_id)
+        kpis = get_kpis(start_date, end_date, cartera_id, gestor_id)
         return jsonify({"success": True, "data": kpis})
     except Exception as e:
         app.logger.error(f"Error obteniendo KPIs: {e}", exc_info=True)
@@ -62,9 +63,9 @@ def dashboard_performance_chart():
     try:
         start_date = _parse_date(request.args.get("start_date"))
         end_date = _parse_date(request.args.get("end_date"))
-        cartera = request.args.get("cartera")
+        cartera_id = request.args.get("cartera_id", type=int)
 
-        data = get_performance_chart_data(start_date, end_date, cartera)
+        data = get_performance_chart_data(start_date, end_date, cartera_id)
         return jsonify({"success": True, "data": data})
     except Exception as e:
         app.logger.error(f"Error obteniendo datos de rendimiento: {e}", exc_info=True)
@@ -120,6 +121,106 @@ def dashboard_cases_status():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.route("/case-statuses")
+def get_case_statuses():
+    """Obtiene todos los estados de casos activos."""
+    try:
+        statuses = CaseStatus.query.filter_by(activo=True).order_by(CaseStatus.nombre).all()
+        return jsonify([s.to_dict() for s in statuses])
+    except Exception as e:
+        app.logger.error(f"Error obteniendo estados de casos: {e}", exc_info=True)
+        return jsonify({"error": "Error obteniendo estados de casos"}), 500
+
+
+@bp.route("/carteras")
+def get_carteras():
+    """Obtiene todas las carteras (activas e inactivas para admin)."""
+    try:
+        # Si es admin, mostrar todas las carteras; si no, solo activas
+        user_role = session.get("role")
+        if user_role == "admin":
+            carteras = Cartera.query.order_by(Cartera.nombre).all()
+        else:
+            carteras = Cartera.query.filter_by(activo=True).order_by(Cartera.nombre).all()
+        return jsonify([c.to_dict() for c in carteras])
+    except Exception as e:
+        app.logger.error(f"Error obteniendo carteras: {e}", exc_info=True)
+        return jsonify({"error": "Error obteniendo carteras"}), 500
+
+
+@bp.route("/carteras", methods=["POST"])
+@require_role("admin")
+def create_cartera():
+    """Crea una nueva cartera."""
+    try:
+        data = request.get_json()
+        
+        # Validar campos requeridos
+        if not data or "nombre" not in data or not data["nombre"].strip():
+            raise ValidationError("El nombre de la cartera es requerido", field="nombre")
+        
+        nombre = data["nombre"].strip()
+        
+        # Validar que el nombre sea único
+        existing = Cartera.query.filter_by(nombre=nombre).first()
+        if existing:
+            raise ValidationError("Ya existe una cartera con ese nombre", field="nombre")
+        
+        # Crear nueva cartera
+        cartera = Cartera(
+            nombre=nombre,
+            activo=data.get("activo", True)
+        )
+        db.session.add(cartera)
+        db.session.commit()
+        
+        audit_log("cartera_created", {"cartera_id": cartera.id, "nombre": cartera.nombre})
+        invalidate_cache("cartera")
+        
+        return jsonify({"success": True, "data": cartera.to_dict()}), 201
+    except ValidationError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creando cartera: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error creando cartera"}), 500
+
+
+@bp.route("/carteras/<int:cartera_id>", methods=["DELETE"])
+@require_role("admin")
+def delete_cartera(cartera_id):
+    """Elimina o desactiva una cartera."""
+    try:
+        cartera = Cartera.query.get_or_404(cartera_id)
+        
+        # Verificar si tiene casos asignados
+        casos_count = Case.query.filter_by(cartera_id=cartera_id).count()
+        
+        if casos_count > 0:
+            # No eliminar físicamente, solo desactivar
+            cartera.activo = False
+            db.session.commit()
+            audit_log("cartera_deactivated", {"cartera_id": cartera_id, "nombre": cartera.nombre, "casos_count": casos_count})
+            invalidate_cache("cartera")
+            return jsonify({
+                "success": True,
+                "message": f"Cartera desactivada (tiene {casos_count} casos asignados)",
+                "data": cartera.to_dict()
+            })
+        else:
+            # Eliminar físicamente si no tiene casos
+            nombre = cartera.nombre
+            db.session.delete(cartera)
+            db.session.commit()
+            audit_log("cartera_deleted", {"cartera_id": cartera_id, "nombre": nombre})
+            invalidate_cache("cartera")
+            return jsonify({"success": True, "message": "Cartera eliminada correctamente"})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error eliminando cartera: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error eliminando cartera"}), 500
+
+
 @bp.route("/cases")
 @require_role("admin")
 def list_cases():
@@ -128,7 +229,7 @@ def list_cases():
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 20, type=int)
         status = request.args.get("status")
-        cartera = request.args.get("cartera")
+        cartera_id = request.args.get("cartera_id", type=int)
         gestor_id = request.args.get("gestor_id", type=int)
         search = request.args.get("search")
 
@@ -136,14 +237,27 @@ def list_cases():
 
         # Aplicar filtros
         if status:
-            query = query.filter(Case.status == status)
-        if cartera:
-            query = query.filter(Case.cartera == cartera)
+            # status puede ser un ID o un nombre de estado
+            try:
+                status_id = int(status)
+                query = query.filter(Case.status_id == status_id)
+            except ValueError:
+                # Es un nombre, buscar por nombre
+                status_obj = CaseStatus.query.filter_by(nombre=status, activo=True).first()
+                if status_obj:
+                    query = query.filter(Case.status_id == status_obj.id)
+        if cartera_id:
+            query = query.filter(Case.cartera_id == cartera_id)
         if gestor_id:
             query = query.filter(Case.assigned_to_id == gestor_id)
         if search:
             query = query.filter(
-                or_(Case.debtor_name.ilike(f"%{search}%"), Case.dni.ilike(f"%{search}%"), Case.entity.ilike(f"%{search}%"))
+                or_(
+                    Case.name.ilike(f"%{search}%"),
+                    Case.lastname.ilike(f"%{search}%"),
+                    Case.dni.ilike(f"%{search}%"),
+                    Case.nro_cliente.ilike(f"%{search}%")
+                )
             )
 
         # Paginación
@@ -169,19 +283,49 @@ def create_case():
         data = request.get_json()
 
         # Validar campos requeridos
-        required_fields = ["entity", "debtor_name", "amount", "cartera"]
+        required_fields = ["name", "lastname", "total", "cartera_id"]
         for field in required_fields:
             if field not in data or not data[field]:
                 raise ValidationError(f"Campo requerido: {field}", field=field)
+        
+        # nro_cliente es opcional
+
+        # Validar que cartera_id exista y esté activa
+        cartera = Cartera.query.filter_by(id=data["cartera_id"], activo=True).first()
+        if not cartera:
+            raise ValidationError("Cartera no encontrada o inactiva", field="cartera_id")
+
+        # Validar status_id (default: 1 = "Sin Arreglo")
+        status_id = data.get("status_id", 1)
+        status_obj = CaseStatus.query.filter_by(id=status_id, activo=True).first()
+        if not status_obj:
+            raise ValidationError("Estado no encontrado o inactivo", field="status_id")
+
+        # Parsear fecha_ultimo_pago si viene como string
+        fecha_ultimo_pago = data.get("fecha_ultimo_pago")
+        if fecha_ultimo_pago and isinstance(fecha_ultimo_pago, str):
+            from datetime import datetime
+            try:
+                fecha_ultimo_pago = datetime.fromisoformat(fecha_ultimo_pago.replace('Z', '+00:00')).date()
+            except:
+                fecha_ultimo_pago = None
 
         case = Case(
-            entity=data["entity"],
-            debtor_name=data["debtor_name"],
+            name=data["name"],
+            lastname=data["lastname"],
             dni=data.get("dni"),
-            amount=data["amount"],
-            status=data.get("status", "en_gestion"),
-            management_status=data.get("management_status", "sin-gestion"),
-            cartera=data["cartera"],
+            nro_cliente=data.get("nro_cliente"),
+            total=data["total"],
+            monto_inicial=data.get("monto_inicial"),
+            fecha_ultimo_pago=fecha_ultimo_pago,
+            telefono=data.get("telefono"),
+            calle_nombre=data.get("calle_nombre"),
+            calle_nro=data.get("calle_nro"),
+            localidad=data.get("localidad"),
+            cp=data.get("cp"),
+            provincia=data.get("provincia"),
+            status_id=status_id,
+            cartera_id=data["cartera_id"],
             assigned_to_id=data.get("assigned_to_id"),
             notes=data.get("notes"),
         )
@@ -193,7 +337,7 @@ def create_case():
         invalidate_cache("cache:dashboard:*")
         invalidate_cache("cache:kpis:*")
 
-        audit_log("create_case", {"case_id": case.id, "entity": case.entity, "amount": float(case.amount)})
+        audit_log("create_case", {"case_id": case.id, "name": case.name, "lastname": case.lastname, "total": float(case.total)})
 
         return jsonify({"success": True, "data": case.to_dict()}), 201
     except ValidationError:
@@ -241,18 +385,46 @@ def update_case(case_id):
         data = request.get_json()
 
         # Actualizar campos permitidos
-        if "entity" in data:
-            case.entity = data["entity"]
-        if "debtor_name" in data:
-            case.debtor_name = data["debtor_name"]
+        if "name" in data:
+            case.name = data["name"]
+        if "lastname" in data:
+            case.lastname = data["lastname"]
         if "dni" in data:
             case.dni = data["dni"]
-        if "amount" in data:
-            case.amount = data["amount"]
-        if "status" in data:
-            case.status = data["status"]
-        if "cartera" in data:
-            case.cartera = data["cartera"]
+        if "nro_cliente" in data:
+            case.nro_cliente = data["nro_cliente"]
+        if "total" in data:
+            case.total = data["total"]
+        if "monto_inicial" in data:
+            case.monto_inicial = data["monto_inicial"]
+        if "telefono" in data:
+            case.telefono = data["telefono"]
+        if "calle_nombre" in data:
+            case.calle_nombre = data["calle_nombre"]
+        if "calle_nro" in data:
+            case.calle_nro = data["calle_nro"]
+        if "localidad" in data:
+            case.localidad = data["localidad"]
+        if "cp" in data:
+            case.cp = data["cp"]
+        if "provincia" in data:
+            case.provincia = data["provincia"]
+        if "status_id" in data:
+            status_obj = CaseStatus.query.filter_by(id=data["status_id"], activo=True).first()
+            if not status_obj:
+                raise ValidationError("Estado no encontrado o inactivo", field="status_id")
+            case.status_id = data["status_id"]
+        if "fecha_ultimo_pago" in data:
+            fecha_ultimo_pago = data["fecha_ultimo_pago"]
+            if fecha_ultimo_pago and isinstance(fecha_ultimo_pago, str):
+                from datetime import datetime
+                try:
+                    fecha_ultimo_pago = datetime.fromisoformat(fecha_ultimo_pago.replace('Z', '+00:00')).date()
+                except:
+                    fecha_ultimo_pago = None
+            case.fecha_ultimo_pago = fecha_ultimo_pago
+        if "cartera_id" in data:
+            case.cartera_id = data["cartera_id"]
         if "assigned_to_id" in data:
             case.assigned_to_id = data["assigned_to_id"]
         if "notes" in data:
@@ -422,23 +594,30 @@ def update_status():
         if user_role != "admin" and case.assigned_to_id != user_id:
             return jsonify({"success": False, "error": "No tiene permisos para actualizar este caso"}), 403
 
-        # Mapear estados del frontend a estados de la BD
-        status_map = {
-            "sin-gestion": "en_gestion",
-            "contactado": "en_gestion",
-            "con-arreglo": "promesa",
-            "incobrable": "incobrable",
-            "de-baja": "incobrable",
-            "pagada": "pagada",
+        # Mapear estados del frontend a IDs de estados en la BD
+        status_name_map = {
+            "sin-gestion": "Sin Arreglo",
+            "en-gestion": "En gestión",
+            "contactado": "Contactado",
+            "con-arreglo": "Con Arreglo",
+            "incobrable": "Incobrable",
+            "a-juicio": "A Juicio",
+            "de-baja": "De baja",
         }
+        
+        # Obtener el nombre del estado desde el mapeo
+        status_nombre = status_name_map.get(status, "Sin Arreglo")
+        
+        # Buscar el estado en la BD
+        status_obj = CaseStatus.query.filter_by(nombre=status_nombre, activo=True).first()
+        if not status_obj:
+            return jsonify({"success": False, "error": f"Estado '{status_nombre}' no encontrado"}), 400
 
-        old_status = case.status
-        old_management_status = case.management_status
-        new_status = status_map.get(status, status)
+        old_status_id = case.status_id
+        old_status_nombre = case.status_rel.nombre if case.status_rel else None
 
-        # Actualizar tanto status como management_status
-        case.status = new_status
-        case.management_status = status  # Guardar el estado detallado del frontend
+        # Actualizar status_id
+        case.status_id = status_obj.id
         db.session.commit()
 
         # Invalidar cache
@@ -449,15 +628,15 @@ def update_status():
             "update_case_status",
             {
                 "case_id": case_id,
-                "old_status": old_status,
-                "old_management_status": old_management_status,
-                "new_status": new_status,
-                "new_management_status": status,
+                "old_status_id": old_status_id,
+                "old_status_nombre": old_status_nombre,
+                "new_status_id": status_obj.id,
+                "new_status_nombre": status_obj.nombre,
             },
         )
 
         app.logger.info(
-            f"Estado actualizado: Caso {case_id} de '{old_status}'/'{old_management_status}' a '{new_status}'/'{status}'"
+            f"Estado actualizado: Caso {case_id} de '{old_status_nombre}' (ID: {old_status_id}) a '{status_obj.nombre}' (ID: {status_obj.id})"
         )
 
         # Recargar el caso para obtener datos actualizados
@@ -474,18 +653,18 @@ def update_status():
             }
             badge_html = status_badges.get(status, f'<span class="status-badge">{status}</span>')
 
-            # Usar management_status si está disponible, sino mapear desde status
-            if case.management_status:
-                frontend_status = case.management_status
-            else:
-                # Mapeo de respaldo si no hay management_status
-                status_to_frontend = {
-                    "en_gestion": "contactado",
-                    "promesa": "con-arreglo",
-                    "pagada": "pagada",
-                    "incobrable": "incobrable",
-                }
-                frontend_status = status_to_frontend.get(case.status, status)
+            # Mapear nombre de estado de BD a código del frontend
+            status_nombre_to_frontend = {
+                "Sin Arreglo": "sin-gestion",
+                "En gestión": "contactado",
+                "Contactado": "contactado",
+                "Con Arreglo": "con-arreglo",
+                "Incobrable": "incobrable",
+                "A Juicio": "con-arreglo",
+                "De baja": "de-baja",
+            }
+            status_nombre = case.status_rel.nombre if case.status_rel else "Sin Arreglo"
+            frontend_status = status_nombre_to_frontend.get(status_nombre, "sin-gestion")
 
             return (
                 f"""
@@ -548,19 +727,27 @@ def get_gestor_cases():
             return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
 
         # Si es admin, puede ver todos los casos
-        # Si es gestor, solo sus casos
+        # Si es gestor, solo sus casos asignados (no ve casos sin asignar)
         query = Case.query
         if user_role == "gestor":
             query = query.filter(Case.assigned_to_id == user_id)
 
         # Filtros opcionales
-        cartera = request.args.get("cartera")
-        if cartera:
-            query = query.filter(Case.cartera == cartera)
+        cartera_id = request.args.get("cartera_id", type=int)
+        if cartera_id:
+            query = query.filter(Case.cartera_id == cartera_id)
 
         status = request.args.get("status")
         if status:
-            query = query.filter(Case.status == status)
+            # status puede ser un ID o un nombre de estado
+            try:
+                status_id = int(status)
+                query = query.filter(Case.status_id == status_id)
+            except ValueError:
+                # Es un nombre, buscar por nombre
+                status_obj = CaseStatus.query.filter_by(nombre=status, activo=True).first()
+                if status_obj:
+                    query = query.filter(Case.status_id == status_obj.id)
 
         # Ordenar por fecha de creación
         cases = query.order_by(Case.created_at.desc()).all()

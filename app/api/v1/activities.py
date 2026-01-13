@@ -62,6 +62,7 @@ def get_case_activities(case_id):
         # Verificar que el usuario tiene acceso al caso
         case = Case.query.get_or_404(case_id)
 
+        # Los gestores solo pueden ver casos asignados a ellos
         if user_role == "gestor" and case.assigned_to_id != user_id:
             return jsonify({"success": False, "error": "No tiene permisos para ver las gestiones de este caso"}), 403
 

@@ -2,91 +2,142 @@
 
 // Variables globales
 let clienteActual = null;
-let carteraActual = 'Cartera A';  // Cambiar a nombres de carteras reales
+let carteraActual = null;  // Ahora será un objeto con id y nombre
+let carteraActualId = null;  // ID de la cartera actual
 let indiceClienteActual = 0;
 let clientesCarteraActual = [];
 let todosLosCasos = [];  // Todos los casos cargados desde la API
 let isLoading = false;
+let carterasDisponibles = [];  // Lista de carteras cargadas desde la API
 
-// Mapeo de carteras del frontend a carteras de la BD
-const carteraMapping = {
-    'favacard': 'Cartera A',
-    'naldo': 'Cartera B',
-    'naranjax': 'Cartera C'
-};
-
-// Mapeo inverso
-const carteraMappingReverse = {
-    'Cartera A': 'favacard',
-    'Cartera B': 'naldo',
-    'Cartera C': 'naranjax'
-};
+// Función para calcular meses de mora desde fecha_ultimo_pago
+function calcularMesesMora(fechaUltimoPago) {
+    if (!fechaUltimoPago) {
+        console.log('[DEBUG] calcularMesesMora: No hay fecha_ultimo_pago');
+        return 0;
+    }
+    
+    try {
+        // La fecha viene en formato ISO string (ej: "2024-10-05")
+        const fechaPago = new Date(fechaUltimoPago);
+        const hoy = new Date();
+        
+        // Validar que la fecha sea válida
+        if (isNaN(fechaPago.getTime())) {
+            console.warn('[DEBUG] calcularMesesMora: Fecha inválida:', fechaUltimoPago);
+            return 0;
+        }
+        
+        // Calcular diferencia en meses
+        const años = hoy.getFullYear() - fechaPago.getFullYear();
+        const meses = hoy.getMonth() - fechaPago.getMonth();
+        const dias = hoy.getDate() - fechaPago.getDate();
+        
+        let totalMeses = años * 12 + meses;
+        
+        // Si el día del mes actual es menor al día del último pago, restar un mes
+        if (dias < 0) {
+            totalMeses -= 1;
+        }
+        
+        // Si la fecha de pago es en el futuro, retornar 0
+        const resultado = totalMeses < 0 ? 0 : totalMeses;
+        console.log(`[DEBUG] calcularMesesMora: ${fechaUltimoPago} -> ${resultado} meses`);
+        return resultado;
+    } catch (e) {
+        console.error('[ERROR] calcularMesesMora:', e, 'Fecha:', fechaUltimoPago);
+        return 0;
+    }
+}
 
 // Función para convertir Case de la API a formato cliente del frontend
 function mapCaseToCliente(caseData) {
-    // Extraer información de contacto de las notas si está disponible
+    // Extraer información de contacto de las notas si está disponible (fallback)
     const notes = caseData.notes || '';
-    const phoneMatch = notes.match(/Contacto: ([^\n]+)/);
     const emailMatch = notes.match(/Email: ([^\n]+)/);
-    const addressMatch = notes.match(/Dirección: ([^\n]+)/);
-    const idMatch = notes.match(/ID: ([^\n]+)/);
     
-    // Usar management_status si está disponible (estado detallado del frontend)
-    // Si no, mapear desde status (compatibilidad hacia atrás)
-    let estado = 'sin-gestion';
-    
-    if (caseData.management_status) {
-        // Usar el estado detallado guardado en la BD
-        estado = caseData.management_status;
-    } else {
-        // Mapeo de respaldo si no hay management_status
-        const statusMap = {
-            'en_gestion': 'contactado',
-            'promesa': 'con-arreglo',
-            'pagada': 'pagada',
-            'incobrable': 'incobrable'
-        };
-        estado = statusMap[caseData.status] || 'sin-gestion';
-        
-        // Si tiene promesas pendientes, asegurar que esté en 'con-arreglo'
-        if (caseData.promises && caseData.promises.length > 0) {
-            const hasPendingPromise = caseData.promises.some(p => p.status === 'pending');
-            if (hasPendingPromise && caseData.status === 'promesa') {
-                estado = 'con-arreglo';
-            }
-        }
-    }
-    
-    // Obtener última actividad
+    // Obtener última actividad (se calculará dinámicamente desde el historial)
     let ultimaGestion = 'N/A';
-    if (caseData.activities && caseData.activities.length > 0) {
-        const lastActivity = caseData.activities[0];
-        if (lastActivity.created_at) {
-            const date = new Date(lastActivity.created_at);
-            ultimaGestion = date.toLocaleDateString('es-AR');
+    // Nota: La última gestión se calculará desde loadActivities cuando se cargue el historial
+    
+    // Mapear status_id a nombre de estado para el frontend
+    let estadoNombre = 'Sin Arreglo';
+    if (caseData.status_nombre) {
+        estadoNombre = caseData.status_nombre;
+    }
+    
+    // Mapear nombre de estado a código de estado del frontend
+    // Este mapeo debe coincidir exactamente con el mapeo en loadCaseStatuses y en el backend
+    const estadoMap = {
+        'Sin Arreglo': 'sin-gestion',
+        'En gestión': 'en-gestion',
+        'Contactado': 'contactado',
+        'Con Arreglo': 'con-arreglo',
+        'Incobrable': 'incobrable',
+        'A Juicio': 'a-juicio',
+        'De baja': 'de-baja'
+    };
+    estado = estadoMap[estadoNombre] || 'sin-gestion';
+    
+    // Construir dirección (solo calle_nombre + calle_nro)
+    let direccionCompleta = 'N/A';
+    if (caseData.calle_nombre || caseData.calle_nro) {
+        const partes = [];
+        if (caseData.calle_nombre) {
+            partes.push(caseData.calle_nombre);
+        }
+        if (caseData.calle_nro) {
+            partes.push(caseData.calle_nro);
+        }
+        direccionCompleta = partes.join(' ');
+    }
+    
+    // Formatear fecha último pago
+    let fechaUltimoPagoFormateada = 'N/A';
+    if (caseData.fecha_ultimo_pago) {
+        try {
+            const fecha = new Date(caseData.fecha_ultimo_pago);
+            fechaUltimoPagoFormateada = fecha.toLocaleDateString('es-AR');
+        } catch (e) {
+            fechaUltimoPagoFormateada = caseData.fecha_ultimo_pago;
         }
     }
+    
+    // Calcular meses de mora
+    const mesesMora = calcularMesesMora(caseData.fecha_ultimo_pago);
+    
+    // Calcular monto total con interés del 5% mensual
+    const montoBase = parseFloat(caseData.total) || 0;
+    const interesMensual = 0.05; // 5%
+    const montoConInteres = montoBase * Math.pow(1 + interesMensual, mesesMora);
     
     return {
         id: caseData.id,
-        nombre: caseData.debtor_name,
+        nombre: `${caseData.name || ''} ${caseData.lastname || ''}`.trim() || 'N/A',
         dni: caseData.dni || 'N/A',
-        numeroId: idMatch ? idMatch[1] : `CASE-${caseData.id}`,
-        telefono: phoneMatch ? phoneMatch[1] : 'N/A',
+        numeroId: caseData.nro_cliente || `CASE-${caseData.id}`,  // Usar nro_cliente directamente
+        telefono: caseData.telefono || 'N/A',  // Usar campo directo
         email: emailMatch ? emailMatch[1] : 'N/A',
-        direccion: addressMatch ? addressMatch[1] : 'N/A',
+        direccion: direccionCompleta,  // Solo calle_nombre + calle_nro
+        localidad: caseData.localidad || 'N/A',
+        provincia: caseData.provincia || 'N/A',
+        cp: caseData.cp || 'N/A',
         fechaNacimiento: 'N/A',  // No está en el modelo Case
-        montoAdeudado: caseData.amount || 0,
-        fechaVencimiento: 'N/A',  // No está en el modelo Case
-        ultimaGestion: ultimaGestion,
+        montoBase: montoBase,  // Monto original sin interés (campo "total")
+        montoInicial: parseFloat(caseData.monto_inicial) || 0,  // Monto inicial
+        montoAdeudado: montoConInteres,  // Monto con interés aplicado
+        fechaVencimiento: fechaUltimoPagoFormateada,  // Mostrar fecha último pago
+        ultimaGestion: ultimaGestion,  // Se actualizará desde loadActivities
         cuotasPendientes: 0,  // No está en el modelo Case
         cuotasPagadas: 0,  // No está en el modelo Case
-        entidadFinanciera: caseData.entity,
         observaciones: notes || 'Sin observaciones',
         estado: estado,
-        diasMora: 0,  // Calcular si es necesario
+        estadoId: caseData.status_id || 1,
+        estadoNombre: estadoNombre,
+        mesesMora: mesesMora,  // Cambiar de diasMora a mesesMora
         clienteId: `#${caseData.id}`,
-        cartera: caseData.cartera,
+        cartera: caseData.cartera_nombre || caseData.cartera,
+        carteraId: caseData.cartera_id,
         caseId: caseData.id  // Guardar ID del caso para actualizaciones
     };
 }
@@ -101,32 +152,40 @@ async function loadCasosFromAPI() {
         const result = await response.json();
         
         if (result.success) {
-            todosLosCasos = result.data;
+            // Limpiar datos antiguos primero
+            todosLosCasos = [];
+            clientesCarteraActual = [];
+            clienteActual = null;
+            indiceClienteActual = 0;
+            
+            // Cargar nuevos datos
+            todosLosCasos = result.data || [];
             console.log(`[OK] Cargados ${todosLosCasos.length} casos desde la API`);
+            
+            // Si no hay casos, mostrar mensaje y salir
+            if (todosLosCasos.length === 0) {
+                showNoCasesMessage();
+                updateTotalCounter();
+                return;
+            }
             
             // Convertir a formato cliente
             const clientes = todosLosCasos.map(mapCaseToCliente);
             
-            // Agrupar por cartera
-            const clientesPorCartera = {
-                'favacard': clientes.filter(c => c.cartera === 'Cartera A'),
-                'naldo': clientes.filter(c => c.cartera === 'Cartera B'),
-                'naranjax': clientes.filter(c => c.cartera === 'Cartera C')
-            };
-            
-            // Actualizar cartera actual si no hay casos en la actual
-            if (clientesPorCartera[carteraMappingReverse[carteraActual]].length === 0) {
-                // Buscar primera cartera con casos
-                for (const [key, carteraName] of Object.entries(carteraMapping)) {
-                    if (clientesPorCartera[key].length > 0) {
-                        carteraActual = carteraName;
-                        break;
-                    }
+            // Si no hay cartera seleccionada y hay casos, seleccionar la primera cartera con casos
+            if (!carteraActualId && clientes.length > 0) {
+                // Obtener la primera cartera que tenga casos
+                const primeraCarteraConCasos = carterasDisponibles.find(c => 
+                    clientes.some(cl => cl.cartera_id === c.id)
+                );
+                if (primeraCarteraConCasos) {
+                    selectCartera(primeraCarteraConCasos.id, primeraCarteraConCasos.nombre);
+                    return; // selectCartera ya actualiza todo
                 }
             }
             
-            // Actualizar lista de clientes
-            clientesCarteraActual = clientesPorCartera[carteraMappingReverse[carteraActual]] || [];
+            // Actualizar lista de clientes según la cartera actual
+            clientesCarteraActual = getClientesCartera();
             
             // Cargar primer cliente si hay
             if (clientesCarteraActual.length > 0) {
@@ -142,10 +201,20 @@ async function loadCasosFromAPI() {
         } else {
             console.error('[ERROR] Error cargando casos:', result.error);
             showErrorMessage('Error al cargar casos: ' + result.error);
+            // Limpiar datos en caso de error
+            todosLosCasos = [];
+            clientesCarteraActual = [];
+            clienteActual = null;
+            showNoCasesMessage();
         }
     } catch (error) {
         console.error('[ERROR] Error en fetch:', error);
         showErrorMessage('Error de conexión al cargar casos');
+        // Limpiar datos en caso de error
+        todosLosCasos = [];
+        clientesCarteraActual = [];
+        clienteActual = null;
+        showNoCasesMessage();
     } finally {
         isLoading = false;
     }
@@ -153,31 +222,120 @@ async function loadCasosFromAPI() {
 
 // Función para obtener lista de clientes de la cartera actual
 function getClientesCartera() {
-    const carteraKey = carteraMappingReverse[carteraActual] || 'favacard';
-    
-    // Si ya tenemos casos cargados, filtrar por cartera
-    if (todosLosCasos.length > 0) {
-        const clientes = todosLosCasos
-            .filter(c => c.cartera === carteraActual)
-            .map(mapCaseToCliente);
-        return clientes;
+    if (!todosLosCasos || todosLosCasos.length === 0) {
+        return [];
     }
     
-    return [];
+    // Filtrar por cartera actual usando cartera_id
+    return todosLosCasos
+        .filter(c => c.cartera_id === carteraActualId)
+        .map(mapCaseToCliente);
+}
+
+// Función para cargar estados de casos desde la API
+async function loadCaseStatuses() {
+    try {
+        const response = await fetch('/api/case-statuses');
+        if (!response.ok) {
+            throw new Error('Error al cargar estados');
+        }
+        const statuses = await response.json();
+        
+        const statusSelector = document.getElementById('status-selector');
+        if (!statusSelector) return;
+        
+        // Limpiar opciones existentes
+        statusSelector.innerHTML = '<option value="">Seleccionar estado...</option>';
+        
+        // Mapeo de nombres de estados de BD a valores del selector
+        const statusValueMap = {
+            'Sin Arreglo': 'sin-gestion',
+            'En gestión': 'en-gestion',
+            'Incobrable': 'incobrable',
+            'Contactado': 'contactado',
+            'Con Arreglo': 'con-arreglo',
+            'A Juicio': 'a-juicio',
+            'De baja': 'de-baja'
+        };
+        
+        // Agregar opciones
+        statuses.forEach(status => {
+            const option = document.createElement('option');
+            const value = statusValueMap[status.nombre] || status.nombre.toLowerCase().replace(/\s+/g, '-');
+            option.value = value;
+            option.textContent = status.nombre;
+            statusSelector.appendChild(option);
+        });
+        
+        console.log(`[OK] Cargados ${statuses.length} estados desde la API`);
+    } catch (error) {
+        console.error('Error cargando estados:', error);
+        const statusSelector = document.getElementById('status-selector');
+        if (statusSelector) {
+            statusSelector.innerHTML = '<option value="">Error al cargar estados</option>';
+        }
+    }
+}
+
+// Función para cargar carteras desde la API
+async function loadCarteras() {
+    try {
+        const response = await fetch('/api/carteras');
+        if (!response.ok) {
+            throw new Error('Error al cargar carteras');
+        }
+        carterasDisponibles = await response.json();
+        
+        // Renderizar dropdown
+        renderCarteraDropdown(carterasDisponibles);
+        
+        // Si no hay cartera seleccionada, seleccionar la primera
+        if (!carteraActualId && carterasDisponibles.length > 0) {
+            const primeraCartera = carterasDisponibles[0];
+            selectCartera(primeraCartera.id, primeraCartera.nombre);
+        }
+    } catch (error) {
+        console.error('Error cargando carteras:', error);
+        // Fallback: mostrar mensaje de error
+        const content = document.getElementById('cartera-dropdown-content');
+        if (content) {
+            content.innerHTML = '<div class="px-4 py-2 text-sm text-red-500">Error al cargar carteras</div>';
+        }
+    }
+}
+
+// Función para renderizar el dropdown de carteras
+function renderCarteraDropdown(carteras) {
+    const content = document.getElementById('cartera-dropdown-content');
+    if (!content) return;
+    
+    if (carteras.length === 0) {
+        content.innerHTML = '<div class="px-4 py-2 text-sm text-gray-500">No hay carteras disponibles</div>';
+        return;
+    }
+    
+    content.innerHTML = carteras.map(cartera => `
+        <button 
+            onclick="selectCartera(${cartera.id}, '📁 ${cartera.nombre}')"
+            class="w-full text-left px-4 py-2 text-sm font-semibold text-purple-600 hover:bg-purple-50 transition-colors"
+        >
+            📁 ${cartera.nombre}
+        </button>
+    `).join('');
 }
 
 // Función para cambiar de cartera y cargar primer cliente
-function changeCartera(cartera) {
-    const carteraKey = carteraMappingReverse[cartera] || cartera;
-    const carteraName = carteraMapping[carteraKey] || cartera;
+function changeCartera(carteraId) {
+    carteraActualId = carteraId;
+    const cartera = carterasDisponibles.find(c => c.id === carteraId);
+    carteraActual = cartera ? cartera.nombre : null;
     
-    carteraActual = carteraName;
     clientesCarteraActual = getClientesCartera();
     
     if (clientesCarteraActual.length > 0) {
         indiceClienteActual = 0;
         loadCliente(clientesCarteraActual[0], 0);
-        updateCarteraSelector(carteraKey);
+        updateCarteraSelector(carteraId, cartera ? cartera.nombre : null);
         limpiarBusqueda();
     } else {
         showNoCasesMessage();
@@ -303,24 +461,31 @@ function loadCliente(cliente, indice) {
     if (nameEl) nameEl.textContent = cliente.nombre;
     if (dniEl) dniEl.textContent = cliente.dni;
     if (numeroIdEl) numeroIdEl.textContent = cliente.numeroId;
-    if (phoneEl) phoneEl.innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono}`;
-    if (emailEl) emailEl.innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email}`;
-    if (addressEl) addressEl.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion}`;
+    if (phoneEl) phoneEl.innerHTML = `<i data-lucide="phone" class="w-4 h-4 text-gray-400"></i> ${cliente.telefono || 'N/A'}`;
+    if (emailEl) emailEl.innerHTML = `<i data-lucide="mail" class="w-4 h-4 text-gray-400"></i> ${cliente.email || 'N/A'}`;
+    
+    // Actualizar dirección (solo calle_nombre + calle_nro)
+    const addressTextEl = document.getElementById('client-address-text');
+    if (addressTextEl) {
+        addressTextEl.textContent = cliente.direccion || 'N/A';
+    } else if (addressEl) {
+        addressEl.innerHTML = `<i data-lucide="map-pin" class="w-4 h-4 text-gray-400"></i> ${cliente.direccion || 'N/A'}`;
+    }
+    
+    // Actualizar localidad, provincia y CP
+    const localidadEl = document.getElementById('client-localidad');
+    const provinciaEl = document.getElementById('client-provincia');
+    const cpEl = document.getElementById('client-cp');
+    if (localidadEl) localidadEl.textContent = cliente.localidad || 'N/A';
+    if (provinciaEl) provinciaEl.textContent = cliente.provincia || 'N/A';
+    if (cpEl) cpEl.textContent = cliente.cp || 'N/A';
+    
     if (birthdateEl) birthdateEl.textContent = cliente.fechaNacimiento;
     
     // Actualizar cartera
-    const carteraNames = {
-        'favacard': 'Favacard',
-        'naldo': 'Naldo',
-        'naranjax': 'NaranjaX',
-        'Cartera A': 'Favacard',
-        'Cartera B': 'Naldo',
-        'Cartera C': 'NaranjaX'
-    };
     const carteraEl = document.getElementById('client-cartera');
     if (carteraEl) {
-        const carteraKey = carteraMappingReverse[cliente.cartera] || 'favacard';
-        carteraEl.innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${carteraNames[carteraKey] || cliente.cartera}`;
+        carteraEl.innerHTML = `<i data-lucide="folder" class="w-4 h-4"></i> ${cliente.cartera || 'Sin cartera'}`;
     }
     
     // Actualizar datos de la deuda
@@ -331,7 +496,8 @@ function loadCliente(cliente, indice) {
     const debtEntityEl = document.getElementById('debt-entity');
     const debtNotesEl = document.getElementById('debt-notes');
     
-    if (debtAmountEl) debtAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
+    // Monto con interés aplicado (5% mensual según meses de mora)
+    if (debtAmountEl) debtAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     if (debtDueDateEl) debtDueDateEl.textContent = cliente.fechaVencimiento;
     if (debtLastMgmtEl) debtLastMgmtEl.textContent = cliente.ultimaGestion;
     if (debtInstallmentsEl) debtInstallmentsEl.innerHTML = `<span class="text-red-600">${cliente.cuotasPendientes}</span> / <span class="text-green-600">${cliente.cuotasPagadas}</span>`;
@@ -339,11 +505,29 @@ function loadCliente(cliente, indice) {
     if (debtNotesEl) debtNotesEl.textContent = cliente.observaciones;
     
     // Actualizar resumen
-    const summaryAmountEl = document.getElementById('summary-amount');
+    const summaryMontoInicialEl = document.getElementById('summary-monto-inicial');
+    const summaryMontoAdeudadoEl = document.getElementById('summary-monto-adeudado');
     const summaryDaysEl = document.getElementById('summary-days-overdue');
     
-    if (summaryAmountEl) summaryAmountEl.textContent = `$${cliente.montoAdeudado.toLocaleString('es-AR')}`;
-    if (summaryDaysEl) summaryDaysEl.textContent = `${cliente.diasMora} días`;
+    if (summaryMontoInicialEl) {
+        summaryMontoInicialEl.textContent = `$${(cliente.montoInicial || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    if (summaryMontoAdeudadoEl) {
+        summaryMontoAdeudadoEl.textContent = `$${(cliente.montoBase || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    
+    // Actualizar calculadora de intereses
+    const calcMontoTotalEl = document.getElementById('calc-monto-total');
+    if (calcMontoTotalEl) {
+        // Formatear a 2 decimales
+        const montoFormateado = (cliente.montoAdeudado || 0).toFixed(2);
+        calcMontoTotalEl.value = montoFormateado;
+        calcularIntereses();
+    }
+    if (summaryDaysEl) {
+        const meses = cliente.mesesMora || 0;
+        summaryDaysEl.textContent = `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+    }
     
     // Actualizar case_id en formularios - CRÍTICO: debe actualizarse siempre
     const currentCaseIdEl = document.getElementById('current-case-id');
@@ -368,11 +552,13 @@ function loadCliente(cliente, indice) {
     
     // Actualizar estado del selector - debe reflejar el estado real del caso
     const statusMap = {
-        'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
+        'sin-gestion': { text: 'Sin Arreglo', class: 'status-sin-gestion' },
+        'en-gestion': { text: 'En gestión', class: 'status-en-gestion' },
         'contactado': { text: 'Contactado', class: 'status-contactado' },
         'con-arreglo': { text: 'Con Arreglo', class: 'status-con-arreglo' },
         'incobrable': { text: 'Incobrable', class: 'status-incobrable' },
-        'de-baja': { text: 'De Baja', class: 'status-de-baja' },
+        'a-juicio': { text: 'A Juicio', class: 'status-a-juicio' },
+        'de-baja': { text: 'De baja', class: 'status-de-baja' },
         'pagada': { text: 'Pagada', class: 'status-pagada' }
     };
     
@@ -428,8 +614,9 @@ function loadCliente(cliente, indice) {
                     // Actualizar en todosLosCasos inmediatamente
                     const caseIndex = todosLosCasos.findIndex(c => c.id === caseId);
                     if (caseIndex !== -1) {
-                        todosLosCasos[caseIndex].management_status = newStatus;
-                        console.log(`[DEBUG] todosLosCasos[${caseIndex}].management_status actualizado`);
+                        // Actualizar status_id basado en el nuevo estado
+                        // Esto se actualizará cuando se guarde en el servidor
+                        console.log(`[DEBUG] todosLosCasos[${caseIndex}] actualizado con nuevo estado`);
                     }
                     
                     // Actualizar en clientesCarteraActual inmediatamente
@@ -486,15 +673,10 @@ function loadCliente(cliente, indice) {
 }
 
 // Función para actualizar el selector de cartera
-function updateCarteraSelector(cartera) {
-    const carteraNames = {
-        'favacard': '📁 Favacard',
-        'naldo': '📁 Naldo',
-        'naranjax': '📁 NaranjaX'
-    };
+function updateCarteraSelector(carteraId, carteraNombre) {
     const selectedTextEl = document.getElementById('cartera-selected-text');
-    if (selectedTextEl) {
-        selectedTextEl.textContent = carteraNames[cartera] || cartera;
+    if (selectedTextEl && carteraNombre) {
+        selectedTextEl.textContent = `📁 ${carteraNombre}`;
     }
 }
 
@@ -518,8 +700,8 @@ window.toggleCarteraDropdown = function() {
 
 // Función para seleccionar una cartera desde el dropdown
 // Función para seleccionar cartera (GLOBAL - usada por onclick en HTML)
-window.selectCartera = function(cartera, displayText) {
-    changeCartera(cartera);
+window.selectCartera = function(carteraId, displayText) {
+    changeCartera(carteraId);
     toggleCarteraDropdown(); // Cerrar el dropdown
 }
 
@@ -527,23 +709,20 @@ window.selectCartera = function(cartera, displayText) {
 // Función para actualizar el badge de estado (GLOBAL - usada por onchange en HTML)
 window.updateStatusBadge = function(status) {
     const statusMap = {
-        'sin-gestion': { text: 'Sin Gestión', class: 'status-sin-gestion' },
+        'sin-gestion': { text: 'Sin Arreglo', class: 'status-sin-gestion' },
+        'en-gestion': { text: 'En gestión', class: 'status-en-gestion' },
         'contactado': { text: 'Contactado', class: 'status-contactado' },
         'con-arreglo': { text: 'Con Arreglo', class: 'status-con-arreglo' },
         'incobrable': { text: 'Incobrable', class: 'status-incobrable' },
-        'de-baja': { text: 'De Baja', class: 'status-de-baja' }
+        'a-juicio': { text: 'A Juicio', class: 'status-a-juicio' },
+        'de-baja': { text: 'De baja', class: 'status-de-baja' }
     };
     
     const display = document.getElementById('current-status-display');
-    const summaryStatus = document.getElementById('summary-status');
     const statusInfo = statusMap[status] || statusMap['sin-gestion'];
     
     if (display) {
         display.innerHTML = `<span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>`;
-    }
-    
-    if (summaryStatus) {
-        summaryStatus.innerHTML = `<span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>`;
     }
 }
 
@@ -635,6 +814,11 @@ async function loadActivities(caseId) {
                 if (typeof lucide !== 'undefined' && lucide.createIcons) {
                     lucide.createIcons();
                 }
+                // Actualizar "Última Gestión" a "N/A" si no hay gestiones
+                const summaryLastManagementEl = document.getElementById('summary-last-management');
+                if (summaryLastManagementEl) {
+                    summaryLastManagementEl.textContent = 'N/A';
+                }
                 return;
             }
             
@@ -670,11 +854,42 @@ async function loadActivities(caseId) {
             if (typeof lucide !== 'undefined' && lucide.createIcons) {
                 lucide.createIcons();
             }
+            
+            // Actualizar "Última Gestión" en el resumen con la gestión más reciente
+            const lastActivity = activities[0]; // Ya están ordenadas por fecha descendente
+            const lastDate = new Date(lastActivity.created_at);
+            const now = new Date();
+            const diffTime = Math.abs(now - lastDate);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            let ultimaGestionTexto = 'N/A';
+            if (diffDays === 0) {
+                ultimaGestionTexto = 'Hoy';
+            } else if (diffDays === 1) {
+                ultimaGestionTexto = 'Hace 1 día';
+            } else {
+                ultimaGestionTexto = `Hace ${diffDays} días`;
+            }
+            
+            const summaryLastManagementEl = document.getElementById('summary-last-management');
+            if (summaryLastManagementEl) {
+                summaryLastManagementEl.textContent = ultimaGestionTexto;
+            }
         } else {
             console.error('[ERROR] Error cargando gestiones:', result.error);
+            // Si hay error, mostrar "N/A"
+            const summaryLastManagementEl = document.getElementById('summary-last-management');
+            if (summaryLastManagementEl) {
+                summaryLastManagementEl.textContent = 'N/A';
+            }
         }
     } catch (error) {
         console.error('[ERROR] Error en loadActivities:', error);
+        // Si hay error, mostrar "N/A"
+        const summaryLastManagementEl = document.getElementById('summary-last-management');
+        if (summaryLastManagementEl) {
+            summaryLastManagementEl.textContent = 'N/A';
+        }
     }
 }
 
@@ -737,8 +952,24 @@ window.deleteActivity = async function(activityId) {
 
 // Función para mostrar mensaje cuando no hay casos
 function showNoCasesMessage() {
+    // Limpiar cualquier cliente mostrado
+    clienteActual = null;
+    
+    // Remover mensaje anterior si existe
+    const existingMessage = document.getElementById('no-cases-message');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+    
+    // Limpiar el contenido del cliente
+    const nameHeader = document.getElementById('client-name-header');
+    const idHeader = document.getElementById('client-id-header');
+    if (nameHeader) nameHeader.textContent = 'Sin casos';
+    if (idHeader) idHeader.textContent = '';
+    
     const mainContent = document.querySelector('.main-content') || document.body;
     const message = document.createElement('div');
+    message.id = 'no-cases-message';
     message.className = 'p-8 text-center';
     message.innerHTML = `
         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
@@ -746,11 +977,7 @@ function showNoCasesMessage() {
             <p class="text-yellow-600 text-sm mt-2">Los casos aparecerán aquí cuando te sean asignados</p>
         </div>
     `;
-    // Solo agregar si no existe ya
-    if (!document.getElementById('no-cases-message')) {
-        message.id = 'no-cases-message';
-        mainContent.appendChild(message);
-    }
+    mainContent.appendChild(message);
 }
 
 // Función para mostrar mensaje de error
@@ -797,8 +1024,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Cargar casos desde la API
-    loadCasosFromAPI();
+    // Cargar estados, carteras y casos
+    loadCaseStatuses().then(() => {
+        return loadCarteras();
+    }).then(() => {
+        // Cargar casos desde la API después de que las carteras estén disponibles
+        loadCasosFromAPI();
+    });
     
     // Inicializar iconos
     setTimeout(() => {
@@ -845,3 +1077,37 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Ya no usamos HTMX para actualizar el estado, lo hacemos con fetch directamente
 });
+
+// Función para calcular intereses (GLOBAL - usada por oninput en HTML)
+window.calcularIntereses = function() {
+    const montoTotalEl = document.getElementById('calc-monto-total');
+    const interesMensualEl = document.getElementById('calc-interes-mensual');
+    const cantidadCuotasEl = document.getElementById('calc-cantidad-cuotas');
+    const totalAbonarEl = document.getElementById('calc-total-abonar');
+    const montoCuotaEl = document.getElementById('calc-monto-cuota');
+    
+    if (!montoTotalEl || !interesMensualEl || !cantidadCuotasEl || !totalAbonarEl || !montoCuotaEl) {
+        return;
+    }
+    
+    const montoTotal = parseFloat(montoTotalEl.value) || 0;
+    const interesMensual = parseFloat(interesMensualEl.value) || 0;
+    const cantidadCuotas = parseInt(cantidadCuotasEl.value) || 1;
+    
+    if (montoTotal <= 0) {
+        totalAbonarEl.textContent = '$0.00';
+        montoCuotaEl.textContent = '$0.00';
+        return;
+    }
+    
+    // Calcular total a abonar: monto * (1 + interés/100) ^ cantidad_cuotas
+    const interesDecimal = interesMensual / 100;
+    const totalAbonar = montoTotal * Math.pow(1 + interesDecimal, cantidadCuotas);
+    
+    // Calcular monto por cuota
+    const montoCuota = totalAbonar / cantidadCuotas;
+    
+    // Formatear y mostrar resultados
+    totalAbonarEl.textContent = `$${totalAbonar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    montoCuotaEl.textContent = `$${montoCuota.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+};

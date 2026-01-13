@@ -12,9 +12,10 @@ sys.path.insert(0, '.')
 from app import create_app
 from app.core.database import db
 from app.features.users.models import User
-from app.features.cases.models import Case
+from app.features.cases.models import Case, CaseStatus
 from app.features.cases.promise import Promise
 from app.features.activities.models import Activity
+from app.features.carteras.models import Cartera
 
 
 def create_sample_data():
@@ -42,52 +43,105 @@ def create_sample_data():
         
         db.session.commit()
         
+        # Get or create carteras
+        cartera_a = Cartera.query.filter_by(nombre='Cristal Cash').first()
+        if not cartera_a:
+            cartera_a = Cartera(nombre='Cristal Cash', activo=True)
+            db.session.add(cartera_a)
+            print("  ✅ Cartera 'Cristal Cash' creada")
+
+        cartera_b = Cartera.query.filter_by(nombre='Favacard').first()
+        if not cartera_b:
+            cartera_b = Cartera(nombre='Favacard', activo=True)
+            db.session.add(cartera_b)
+            print("  ✅ Cartera 'Favacard' creada")
+        db.session.commit()
+        
+        # Get or create case statuses
+        status_sin_arreglo = CaseStatus.query.filter_by(nombre='Sin Arreglo').first()
+        status_en_gestion = CaseStatus.query.filter_by(nombre='En gestión').first()
+        status_con_arreglo = CaseStatus.query.filter_by(nombre='Con Arreglo').first()
+        status_contactado = CaseStatus.query.filter_by(nombre='Contactado').first()
+        status_incobrable = CaseStatus.query.filter_by(nombre='Incobrable').first()
+        
+        if not status_sin_arreglo:
+            status_sin_arreglo = CaseStatus(nombre='Sin Arreglo', activo=True)
+            db.session.add(status_sin_arreglo)
+        if not status_en_gestion:
+            status_en_gestion = CaseStatus(nombre='En gestión', activo=True)
+            db.session.add(status_en_gestion)
+        if not status_con_arreglo:
+            status_con_arreglo = CaseStatus(nombre='Con Arreglo', activo=True)
+            db.session.add(status_con_arreglo)
+        if not status_contactado:
+            status_contactado = CaseStatus(nombre='Contactado', activo=True)
+            db.session.add(status_contactado)
+        if not status_incobrable:
+            status_incobrable = CaseStatus(nombre='Incobrable', activo=True)
+            db.session.add(status_incobrable)
+        db.session.commit()
+        
         # Crear casos de ejemplo
         cases_data = [
             {
-                'entity': 'Banco Nacional',
-                'debtor_name': 'Carlos Rodríguez',
+                'name': 'Carlos',
+                'lastname': 'Rodríguez',
                 'dni': '12345678',
-                'amount': Decimal('50000.00'),
-                'status': 'pagada',
-                'cartera': 'Cartera A',
-                'assigned_to': gestor
+                'nro_cliente': 'CLI-001',
+                'total': Decimal('50000.00'),
+                'fecha_ultimo_pago': date.today() - timedelta(days=30),
+                'status_id': status_con_arreglo.id,
+                'cartera_id': cartera_a.id,
+                'assigned_to_id': gestor.id,
+                'notes': 'Cliente contactado, acuerdo de pago establecido'
             },
             {
-                'entity': 'Cooperativa El Ahorro',
-                'debtor_name': 'María González',
+                'name': 'María',
+                'lastname': 'González',
                 'dni': '23456789',
-                'amount': Decimal('75000.00'),
-                'status': 'en_gestion',
-                'cartera': 'Cartera A',
-                'assigned_to': gestor
+                'nro_cliente': 'CLI-002',
+                'total': Decimal('75000.00'),
+                'fecha_ultimo_pago': None,
+                'status_id': status_en_gestion.id,
+                'cartera_id': cartera_a.id,
+                'assigned_to_id': gestor.id,
+                'notes': 'En proceso de contacto'
             },
             {
-                'entity': 'Financiera Express',
-                'debtor_name': 'Pedro Martínez',
+                'name': 'Pedro',
+                'lastname': 'Martínez',
                 'dni': '34567890',
-                'amount': Decimal('30000.00'),
-                'status': 'promesa',
-                'cartera': 'Cartera B',
-                'assigned_to': gestor
+                'nro_cliente': 'CLI-003',
+                'total': Decimal('30000.00'),
+                'fecha_ultimo_pago': date.today() - timedelta(days=15),
+                'status_id': status_contactado.id,
+                'cartera_id': cartera_b.id,
+                'assigned_to_id': gestor.id,
+                'notes': 'Contactado, esperando respuesta'
             },
             {
-                'entity': 'Banco Comercial',
-                'debtor_name': 'Ana López',
+                'name': 'Ana',
+                'lastname': 'López',
                 'dni': '45678901',
-                'amount': Decimal('100000.00'),
-                'status': 'en_gestion',
-                'cartera': 'Cartera B',
-                'assigned_to': gestor
+                'nro_cliente': 'CLI-004',
+                'total': Decimal('100000.00'),
+                'fecha_ultimo_pago': None,
+                'status_id': status_sin_arreglo.id,
+                'cartera_id': cartera_b.id,
+                'assigned_to_id': gestor.id,
+                'notes': 'Sin contacto aún'
             },
             {
-                'entity': 'Cooperativa Popular',
-                'debtor_name': 'Luis Fernández',
+                'name': 'Luis',
+                'lastname': 'Fernández',
                 'dni': '56789012',
-                'amount': Decimal('25000.00'),
-                'status': 'pagada',
-                'cartera': 'Cartera C',
-                'assigned_to': gestor
+                'nro_cliente': 'CLI-005',
+                'total': Decimal('25000.00'),
+                'fecha_ultimo_pago': date.today() - timedelta(days=60),
+                'status_id': status_con_arreglo.id,
+                'cartera_id': cartera_a.id,
+                'assigned_to_id': gestor.id,
+                'notes': 'Pago parcial realizado'
             },
         ]
         
@@ -95,86 +149,64 @@ def create_sample_data():
         for case_data in cases_data:
             # Verificar si el caso ya existe
             existing = Case.query.filter_by(
-                entity=case_data['entity'],
-                debtor_name=case_data['debtor_name']
+                name=case_data['name'],
+                lastname=case_data['lastname'],
+                dni=case_data['dni']
             ).first()
             
-            if existing:
-                print(f"  ⏭️  Caso ya existe: {case_data['entity']} - {case_data['debtor_name']}")
-                cases_created.append(existing)
-                continue
-            
-            case = Case(
-                entity=case_data['entity'],
-                debtor_name=case_data['debtor_name'],
-                dni=case_data['dni'],
-                amount=case_data['amount'],
-                status=case_data['status'],
-                cartera=case_data['cartera'],
-                assigned_to_id=case_data['assigned_to'].id if case_data['assigned_to'] else None
-            )
-            db.session.add(case)
-            cases_created.append(case)
-            print(f"  ✅ Caso creado: {case_data['entity']} - ${case_data['amount']}")
+            if not existing:
+                case = Case(
+                    name=case_data['name'],
+                    lastname=case_data['lastname'],
+                    dni=case_data['dni'],
+                    nro_cliente=case_data.get('nro_cliente'),
+                    total=case_data['total'],
+                    fecha_ultimo_pago=case_data['fecha_ultimo_pago'],
+                    status_id=case_data['status_id'],
+                    cartera_id=case_data['cartera_id'],
+                    assigned_to_id=case_data['assigned_to_id'],
+                    notes=case_data['notes']
+                )
+                db.session.add(case)
+                cases_created.append(case)
+                print(f"  ✅ Caso creado: {case_data['name']} {case_data['lastname']}")
         
         db.session.commit()
         
-        # Crear promesas para algunos casos
-        print("\n📅 Creando promesas...")
-        for case in cases_created[:3]:  # Primeros 3 casos
-            if case.status == 'promesa' or case.status == 'en_gestion':
-                # Verificar si ya tiene promesas
-                if case.promises.count() > 0:
-                    print(f"  ⏭️  Caso {case.id} ya tiene promesas")
-                    continue
-                
+        # Crear algunas promesas de pago
+        if cases_created:
+            for case in cases_created[:3]:  # Solo para los primeros 3 casos
                 promise = Promise(
                     case_id=case.id,
-                    amount=case.amount * Decimal('0.5'),  # 50% del monto
-                    promise_date=date.today() + timedelta(days=7),
-                    status='pending'
+                    amount=case.total * Decimal('0.5'),  # 50% del total
+                    promise_date=date.today() + timedelta(days=30),
+                    status='pending',
+                    notes='Primera cuota acordada'
                 )
                 db.session.add(promise)
-                print(f"  ✅ Promesa creada para caso {case.id}: ${promise.amount}")
+                print(f"  ✅ Promesa creada para caso {case.id}")
         
         db.session.commit()
         
-        # Crear actividades
-        print("\n📞 Creando actividades...")
-        activity_types = ['call', 'email', 'visit', 'note']
-        for i, case in enumerate(cases_created):
-            # Crear 2-3 actividades por caso
-            for j in range(2):
+        # Crear algunas actividades
+        if cases_created:
+            for case in cases_created[:2]:  # Solo para los primeros 2 casos
                 activity = Activity(
                     case_id=case.id,
-                    type=activity_types[i % len(activity_types)],
-                    notes=f'Actividad de prueba {j+1} para {case.debtor_name}',
-                    created_by_id=gestor.id if gestor else admin.id
+                    type='call',
+                    notes='Llamada realizada, sin respuesta',
+                    created_by_id=gestor.id
                 )
                 db.session.add(activity)
-            print(f"  ✅ {2} actividades creadas para caso {case.id}")
+                print(f"  ✅ Actividad creada para caso {case.id}")
         
         db.session.commit()
         
-        print("\n" + "=" * 60)
-        print("✅ Datos de muestra creados exitosamente!")
-        print("=" * 60)
-        print(f"\n📊 Resumen:")
-        print(f"  - Casos: {Case.query.count()}")
-        print(f"  - Promesas: {Promise.query.count()}")
-        print(f"  - Actividades: {Activity.query.count()}")
-        print(f"  - Usuarios: {User.query.count()}")
-        print("\n🎉 Ahora puedes ver datos reales en el dashboard!")
-        print("   Inicia la app y haz login como 'admin'")
-        print("=" * 60)
+        print(f"\n✅ Datos de muestra creados exitosamente!")
+        print(f"   - {len(cases_created)} casos creados")
+        print(f"   - {len(cases_created[:3])} promesas creadas")
+        print(f"   - {len(cases_created[:2])} actividades creadas")
 
 
 if __name__ == '__main__':
-    try:
-        create_sample_data()
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
+    create_sample_data()

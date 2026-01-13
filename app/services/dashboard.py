@@ -8,10 +8,11 @@ from typing import Dict, List, Optional
 from sqlalchemy import func
 
 from ..core.database import db
-from ..features.cases.models import Case
+from ..features.cases.models import Case, CaseStatus
 from ..features.cases.promise import Promise
 from ..features.activities.models import Activity
 from ..features.users.models import User
+from ..features.carteras.models import Cartera
 from .cache import cache_result
 
 
@@ -19,7 +20,7 @@ from .cache import cache_result
 def get_kpis(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    cartera: Optional[str] = None,
+    cartera_id: Optional[int] = None,
     gestor_id: Optional[int] = None,
 ) -> Dict:
     """
@@ -28,7 +29,7 @@ def get_kpis(
     Args:
         start_date: Fecha de inicio del período
         end_date: Fecha de fin del período
-        cartera: Filtro por cartera
+        cartera_id: Filtro por cartera (ID)
         gestor_id: Filtro por gestor
 
     Returns:
@@ -42,17 +43,22 @@ def get_kpis(
         query = query.filter(Case.created_at >= start_date)
     if end_date:
         query = query.filter(Case.created_at <= end_date)
-    if cartera:
-        query = query.filter(Case.cartera == cartera)
+    if cartera_id:
+        query = query.filter(Case.cartera_id == cartera_id)
     if gestor_id:
         query = query.filter(Case.assigned_to_id == gestor_id)
 
-    # Monto total recuperado (casos pagados)
-    paid_cases = query.filter(Case.status == "pagada").all()
-    monto_recuperado = sum(float(c.amount) for c in paid_cases)
+    # Monto total recuperado (casos con arreglo - estado "Con Arreglo")
+    # Buscar estado "Con Arreglo" por nombre
+    con_arreglo_status = CaseStatus.query.filter_by(nombre="Con Arreglo", activo=True).first()
+    if con_arreglo_status:
+        paid_cases = query.filter(Case.status_id == con_arreglo_status.id).all()
+    else:
+        paid_cases = []
+    monto_recuperado = sum(float(c.total) for c in paid_cases)
 
     # Monto total de deuda
-    total_deuda = query.with_entities(func.sum(Case.amount)).scalar() or Decimal("0")
+    total_deuda = query.with_entities(func.sum(Case.total)).scalar() or Decimal("0")
     total_deuda_float = float(total_deuda)
 
     # Tasa de recupero
@@ -84,7 +90,7 @@ def get_kpis(
         activities_query = activities_query.filter(Activity.created_at <= end_date)
     if gestor_id:
         activities_query = activities_query.filter(Activity.created_by_id == gestor_id)
-    if cartera or gestor_id:
+    if cartera_id or gestor_id:
         # Filtrar por casos
         case_ids = [c.id for c in query.all()]
         if case_ids:
@@ -107,7 +113,7 @@ def get_kpis(
 
 @cache_result(timeout=300, key_prefix="performance_chart")
 def get_performance_chart_data(
-    start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, cartera: Optional[str] = None
+    start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, cartera_id: Optional[int] = None
 ) -> Dict:
     """
     Obtiene datos para el gráfico de rendimiento por semana y cartera.
@@ -128,29 +134,33 @@ def get_performance_chart_data(
         weeks.append((current, week_end))
         current = week_end
 
-    # Obtener todas las carteras
-    carteras = db.session.query(Case.cartera).distinct().all()
-    carteras = [c[0] for c in carteras] if carteras else ["Cartera A", "Cartera B", "Cartera C"]
+    # Obtener todas las carteras activas desde la tabla carteras
+    carteras = Cartera.query.filter_by(activo=True).order_by(Cartera.nombre).limit(5).all()
 
     # Datos por semana y cartera
     datasets = []
     colors = ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe"]
 
-    for idx, cartera_name in enumerate(carteras[:5]):  # Máximo 5 carteras
+    for idx, cartera in enumerate(carteras):
+        if cartera_id and cartera.id != cartera_id:
+            continue
         data = []
         for week_start, week_end in weeks:
-            query = Case.query.filter(
-                Case.cartera == cartera_name,
-                Case.created_at >= week_start,
-                Case.created_at < week_end,
-                Case.status == "pagada",
-            )
-            if cartera and cartera != cartera_name:
-                continue
-            total = query.with_entities(func.sum(Case.amount)).scalar() or Decimal("0")
+            # Buscar estado "Con Arreglo" para casos pagados
+            con_arreglo_status = CaseStatus.query.filter_by(nombre="Con Arreglo", activo=True).first()
+            if con_arreglo_status:
+                query = Case.query.filter(
+                    Case.cartera_id == cartera.id,
+                    Case.created_at >= week_start,
+                    Case.created_at < week_end,
+                    Case.status_id == con_arreglo_status.id,
+                )
+            else:
+                query = Case.query.filter(False)  # No hay estado, no hay datos
+            total = query.with_entities(func.sum(Case.total)).scalar() or Decimal("0")
             data.append(float(total))
 
-        datasets.append({"label": cartera_name, "data": data, "backgroundColor": colors[idx % len(colors)]})
+        datasets.append({"label": cartera.nombre, "data": data, "backgroundColor": colors[idx % len(colors)]})
 
     labels = [f"Sem {i+1}" for i in range(len(weeks))]
 
@@ -165,7 +175,10 @@ def get_cartera_distribution() -> Dict:
     Returns:
         Diccionario con datos para gráfico de dona
     """
-    result = db.session.query(Case.cartera, func.sum(Case.amount).label("total")).group_by(Case.cartera).all()
+    result = db.session.query(
+        Cartera.nombre,
+        func.sum(Case.total).label("total")
+    ).join(Case, Cartera.id == Case.cartera_id).group_by(Cartera.id, Cartera.nombre).all()
 
     labels = [r[0] for r in result]
     data = [float(r[1]) for r in result]
@@ -189,10 +202,15 @@ def get_gestores_ranking(limit: int = 10) -> List[Dict]:
     gestores = User.query.filter(User.role == "gestor", User.active.is_(True)).all()
 
     ranking = []
+    # Buscar estado "Con Arreglo" para casos pagados
+    con_arreglo_status = CaseStatus.query.filter_by(nombre="Con Arreglo", activo=True).first()
     for gestor in gestores:
-        cases = Case.query.filter(Case.assigned_to_id == gestor.id, Case.status == "pagada").all()
+        if con_arreglo_status:
+            cases = Case.query.filter(Case.assigned_to_id == gestor.id, Case.status_id == con_arreglo_status.id).all()
+        else:
+            cases = []
 
-        monto_recuperado = sum(float(c.amount) for c in cases)
+        monto_recuperado = sum(float(c.total) for c in cases)
         total_casos = Case.query.filter(Case.assigned_to_id == gestor.id).count()
         casos_pagados = len(cases)
 
@@ -229,12 +247,13 @@ def get_cases_status_distribution() -> Dict:
     Returns:
         Diccionario con conteos por estado
     """
-    statuses = ["en_gestion", "promesa", "pagada", "incobrable"]
+    # Obtener todos los estados activos
+    statuses = CaseStatus.query.filter_by(activo=True).all()
     distribution = {}
 
     for status in statuses:
-        count = Case.query.filter(Case.status == status).count()
-        distribution[status] = count
+        count = Case.query.filter(Case.status_id == status.id).count()
+        distribution[status.nombre] = count
 
     return distribution
 
@@ -256,8 +275,12 @@ def get_comparison_data() -> Dict:
         previous_month_end = datetime(now.year, now.month, 1)
 
     # Mes actual
-    current_cases = Case.query.filter(Case.created_at >= current_month_start, Case.status == "pagada").all()
-    current_monto = sum(float(c.amount) for c in current_cases)
+    con_arreglo_status = CaseStatus.query.filter_by(nombre="Con Arreglo", activo=True).first()
+    if con_arreglo_status:
+        current_cases = Case.query.filter(Case.created_at >= current_month_start, Case.status_id == con_arreglo_status.id).all()
+    else:
+        current_cases = []
+    current_monto = sum(float(c.total) for c in current_cases)
 
     current_promises = Promise.query.filter(Promise.created_at >= current_month_start).all()
     current_fulfilled = sum(1 for p in current_promises if p.status == "fulfilled")
@@ -266,10 +289,13 @@ def get_comparison_data() -> Dict:
     current_activities = Activity.query.filter(Activity.created_at >= current_month_start).count()
 
     # Mes anterior
-    previous_cases = Case.query.filter(
-        Case.created_at >= previous_month_start, Case.created_at < previous_month_end, Case.status == "pagada"
-    ).all()
-    previous_monto = sum(float(c.amount) for c in previous_cases)
+    if con_arreglo_status:
+        previous_cases = Case.query.filter(
+            Case.created_at >= previous_month_start, Case.created_at < previous_month_end, Case.status_id == con_arreglo_status.id
+        ).all()
+    else:
+        previous_cases = []
+    previous_monto = sum(float(c.total) for c in previous_cases)
 
     previous_promises = Promise.query.filter(
         Promise.created_at >= previous_month_start, Promise.created_at < previous_month_end

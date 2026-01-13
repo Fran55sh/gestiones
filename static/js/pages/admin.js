@@ -5,7 +5,7 @@ let performanceChart, carteraChart, comparisonChart;
 let currentFilters = {
     start_date: null,
     end_date: null,
-    cartera: null,
+    cartera_id: null,
     gestor_id: null
 };
 
@@ -25,7 +25,8 @@ async function initializeDashboard() {
             loadPerformanceChart(),
             loadCarteraChart(),
             loadComparisonChart(),
-            loadGestoresRanking()
+            loadGestoresRanking(),
+            loadCarteraFilter()
         ]);
     } catch (error) {
         console.error('Error inicializando dashboard:', error);
@@ -39,7 +40,7 @@ async function loadKPIs() {
         const params = new URLSearchParams();
         if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
         if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
-        if (currentFilters.cartera) params.append('cartera', currentFilters.cartera);
+        if (currentFilters.cartera_id) params.append('cartera_id', currentFilters.cartera_id);
         if (currentFilters.gestor_id) params.append('gestor_id', currentFilters.gestor_id);
         
         const response = await fetch(`/api/dashboard/kpis?${params}`);
@@ -79,7 +80,7 @@ async function loadPerformanceChart() {
         const params = new URLSearchParams();
         if (currentFilters.start_date) params.append('start_date', currentFilters.start_date);
         if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
-        if (currentFilters.cartera) params.append('cartera', currentFilters.cartera);
+        if (currentFilters.cartera_id) params.append('cartera_id', currentFilters.cartera_id);
         
         const response = await fetch(`/api/dashboard/charts/performance?${params}`);
         const result = await response.json();
@@ -287,13 +288,13 @@ function updatePeriod(value) {
 function filterBy(type, value) {
     if (value === '' || value === 'all') {
         if (type === 'cartera') {
-            currentFilters.cartera = null;
+            currentFilters.cartera_id = null;
         } else if (type === 'gestor') {
             currentFilters.gestor_id = null;
         }
     } else {
         if (type === 'cartera') {
-            currentFilters.cartera = value;
+            currentFilters.cartera_id = parseInt(value);
         } else if (type === 'gestor') {
             currentFilters.gestor_id = parseInt(value);
         }
@@ -333,4 +334,182 @@ function showError(message) {
     setTimeout(() => {
         errorDiv.remove();
     }, 5000);
+}
+
+function showSuccess(message) {
+    // Crear o actualizar mensaje de éxito
+    let successDiv = document.getElementById('success-message');
+    if (!successDiv) {
+        successDiv = document.createElement('div');
+        successDiv.id = 'success-message';
+        successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 15px; border-radius: 8px; z-index: 1000;';
+        document.body.appendChild(successDiv);
+    }
+    successDiv.textContent = message;
+    setTimeout(() => {
+        successDiv.remove();
+    }, 3000);
+}
+
+// ==================== GESTIÓN DE CARTERAS ====================
+
+// Abrir modal de carteras
+function openCarterasModal() {
+    const modal = document.getElementById('carterasModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        loadCarteras();
+    }
+}
+
+// Cerrar modal de carteras
+function closeCarterasModal() {
+    const modal = document.getElementById('carterasModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Cerrar modal al hacer clic fuera
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('carterasModal');
+    if (modal && event.target === modal) {
+        closeCarterasModal();
+    }
+});
+
+// Cargar lista de carteras
+async function loadCarteras() {
+    try {
+        const response = await fetch('/api/carteras');
+        if (!response.ok) {
+            throw new Error('Error al cargar carteras');
+        }
+        const carteras = await response.json();
+        renderCarterasList(carteras);
+    } catch (error) {
+        console.error('Error cargando carteras:', error);
+        const list = document.getElementById('carterasList');
+        if (list) {
+            list.innerHTML = '<div style="padding: 0.75rem; background: #fee2e2; border-radius: 0.5rem; color: #dc2626;">Error al cargar carteras</div>';
+        }
+    }
+}
+
+// Renderizar lista de carteras
+function renderCarterasList(carteras) {
+    const list = document.getElementById('carterasList');
+    if (!list) return;
+
+    if (carteras.length === 0) {
+        list.innerHTML = '<div style="padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem; text-align: center; color: #64748b;">No hay carteras registradas</div>';
+        return;
+    }
+
+    list.innerHTML = carteras.map(cartera => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: ${cartera.activo ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${cartera.activo ? '#bbf7d0' : '#fecaca'}; border-radius: 0.5rem;">
+            <div>
+                <div style="font-weight: 600; color: #1e293b;">${cartera.nombre}</div>
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
+                    ${cartera.activo ? '✅ Activa' : '❌ Inactiva'}
+                </div>
+            </div>
+            <button 
+                onclick="deleteCartera(${cartera.id}, '${cartera.nombre}', ${cartera.activo})"
+                style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; font-weight: 600;"
+            >
+                ${cartera.activo ? 'Desactivar' : 'Eliminar'}
+            </button>
+        </div>
+    `).join('');
+}
+
+// Agregar nueva cartera
+async function addCartera(event) {
+    event.preventDefault();
+    const input = document.getElementById('newCarteraNombre');
+    const nombre = input.value.trim();
+
+    if (!nombre) {
+        showError('El nombre de la cartera es requerido');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/carteras', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ nombre: nombre, activo: true })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            input.value = '';
+            showSuccess('Cartera agregada correctamente');
+            loadCarteras();
+            // Recargar filtros de cartera en el dashboard
+            loadCarteraFilter();
+        } else {
+            showError(result.error || 'Error al agregar cartera');
+        }
+    } catch (error) {
+        console.error('Error agregando cartera:', error);
+        showError('Error al agregar cartera');
+    }
+}
+
+// Eliminar/desactivar cartera
+async function deleteCartera(carteraId, nombre, activo) {
+    const accion = activo ? 'desactivar' : 'eliminar';
+    if (!confirm(`¿Estás seguro de que deseas ${accion} la cartera "${nombre}"?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/carteras/${carteraId}`, {
+            method: 'DELETE',
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showSuccess(result.message || 'Cartera procesada correctamente');
+            loadCarteras();
+            // Recargar filtros de cartera en el dashboard
+            loadCarteraFilter();
+        } else {
+            showError(result.error || 'Error al procesar cartera');
+        }
+    } catch (error) {
+        console.error('Error eliminando cartera:', error);
+        showError('Error al eliminar cartera');
+    }
+}
+
+// Cargar filtro de carteras dinámicamente
+async function loadCarteraFilter() {
+    try {
+        const response = await fetch('/api/carteras');
+        if (!response.ok) return;
+        const carteras = await response.json();
+        
+        // Actualizar el select de filtro de carteras
+        const carteraSelect = document.getElementById('carteraFilterSelect');
+        if (carteraSelect) {
+            const currentValue = carteraSelect.value;
+            carteraSelect.innerHTML = `
+                <option value="">Por cartera</option>
+                <option value="all">Todas</option>
+                ${carteras.filter(c => c.activo).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
+            `;
+            if (currentValue) {
+                carteraSelect.value = currentValue;
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando filtro de carteras:', error);
+    }
 }

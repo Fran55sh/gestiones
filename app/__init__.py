@@ -16,10 +16,11 @@ from werkzeug.exceptions import HTTPException
 
 from .core.database import db  # Import correcto desde core.database
 from .features.users.models import User
-from .features.cases.models import Case
+from .features.cases.models import Case, CaseStatus
 from .features.cases.promise import Promise
 from .features.activities.models import Activity
 from .features.contact.models import ContactSubmission
+from .features.carteras.models import Cartera
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,8 @@ def create_app() -> Flask:
         is_testing = os.getenv("TESTING", "").lower() in ["true", "1", "yes"]
         if not is_testing and not app.config.get("TESTING", False):
             _migrate_default_users(app)
+            _create_default_carteras(app)
+            _create_default_case_statuses(app)
 
     # Project paths in config
     app.config["ROOT_DIR"] = str(project_root)
@@ -167,66 +170,89 @@ def create_app() -> Flask:
     # Register API blueprints
     app.register_blueprint(api_v1_bp)
 
-    # Health
-    @app.route("/healthz")
-    def healthz():
-        return jsonify({"status": "ok"})
-
-    # Security headers
-    @app.after_request
-    def set_security_headers(response):
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://unpkg.com https://*.unpkg.com https://cdn.tailwindcss.com; connect-src 'self' https://unpkg.com https://*.unpkg.com",
-        )
-        return response
-
-    # Error handlers centralizados
-    from .utils.error_handler import handle_app_error, handle_http_exception, handle_generic_exception
-    from .utils.exceptions import AppError
-
-    @app.errorhandler(AppError)
-    def handle_app_error_wrapper(error):
-        return handle_app_error(error)
-
-    @app.errorhandler(404)
-    @app.errorhandler(403)
-    @app.errorhandler(401)
-    @app.errorhandler(400)
-    def handle_http_errors(error):
-        return handle_http_exception(error)
-
-    @app.errorhandler(500)
-    def handle_500(error):
-        return handle_generic_exception(error)
+    # Error handlers
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(e):
+        """Maneja excepciones HTTP."""
+        if request.path.startswith("/api/"):
+            return jsonify({"success": False, "error": e.description, "status_code": e.code}), e.code
+        return e
 
     @app.errorhandler(Exception)
-    def handle_all_exceptions(error):
-        # Si ya es un AppError o HTTPException, dejar que otros handlers lo manejen
-        if isinstance(error, (AppError, HTTPException)):
-            raise error
-        return handle_generic_exception(error)
+    def handle_exception(e):
+        """Maneja excepciones no controladas."""
+        app.logger.error(f"Error no controlado: {e}", exc_info=True)
+        if request.path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Error interno del servidor", "status_code": 500}), 500
+        raise e
+
+    # Health check endpoint
+    @app.route("/healthz")
+    def healthz():
+        """Health check endpoint."""
+        return jsonify({"status": "ok"}), 200
 
     return app
 
 
 def _migrate_default_users(app):
-    """Migra usuarios por defecto a la base de datos si no existen."""
-    default_users = {
-        "admin": {"password": "admin123", "role": "admin"},
-        "gestor": {"password": "gestor123", "role": "gestor"},
-        "usuario": {"password": "user123", "role": "user"},
-    }
+    """Crea usuarios por defecto si no existen."""
+    from .features.users.models import User
 
-    for username, user_data in default_users.items():
-        existing_user = User.query.filter_by(username=username).first()
+    default_users = [
+        {"username": "admin", "password": "admin123", "role": "admin"},
+        {"username": "gestor", "password": "gestor123", "role": "gestor"},
+        {"username": "usuario", "password": "user123", "role": "user"},
+    ]
+
+    for user_data in default_users:
+        existing_user = User.query.filter_by(username=user_data["username"]).first()
         if not existing_user:
-            new_user = User(username=username, role=user_data["role"], active=True)
-            new_user.set_password(user_data["password"])
+            new_user = User(
+                username=user_data["username"],
+                password_hash=generate_password_hash(user_data["password"]),
+                role=user_data["role"],
+                active=True,
+            )
             db.session.add(new_user)
-            logger.info(f"Usuario por defecto creado: {username} ({user_data['role']})")
+            logger.info(f"Usuario por defecto creado: {user_data['username']}")
 
+    db.session.commit()
+
+
+def _create_default_carteras(app):
+    """Crea carteras por defecto si no existen."""
+    from .features.carteras.models import Cartera
+
+    default_carteras = ["Cristal Cash", "Favacard"]
+
+    for nombre in default_carteras:
+        existing_cartera = Cartera.query.filter_by(nombre=nombre).first()
+        if not existing_cartera:
+            new_cartera = Cartera(nombre=nombre, activo=True)
+            db.session.add(new_cartera)
+            logger.info(f"Cartera por defecto creada: {nombre}")
+
+    db.session.commit()
+
+
+def _create_default_case_statuses(app):
+    """Crea estados de casos por defecto si no existen."""
+    from .features.cases.models import CaseStatus
+
+    default_statuses = [
+        "Sin Arreglo",
+        "En gestión",
+        "Incobrable",
+        "Contactado",
+        "Con Arreglo",
+        "A Juicio",
+        "De baja",
+    ]
+    for nombre in default_statuses:
+        existing_status = CaseStatus.query.filter_by(nombre=nombre).first()
+        if not existing_status:
+            new_status = CaseStatus(nombre=nombre, activo=True)
+            db.session.add(new_status)
+            logger.info(f"Estado de caso por defecto creado: {nombre}")
     db.session.commit()

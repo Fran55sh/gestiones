@@ -15,8 +15,13 @@ sys.path.insert(0, str(project_root))
 
 # Import app and models
 from app import create_app
-from app.db import db
-from app.models import User, Case, Promise, Activity, ContactSubmission
+from app.core.database import db
+from app.features.users.models import User
+from app.features.cases.models import Case, CaseStatus
+from app.features.cases.promise import Promise
+from app.features.activities.models import Activity
+from app.features.contact.models import ContactSubmission
+from app.features.carteras.models import Cartera
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
