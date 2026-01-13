@@ -96,6 +96,17 @@ def import_data(json_file='data/export_for_prod.json'):
         casos_importados = 0
         casos_skipped = 0
         casos_map = {}  # Mapeo de nro_cliente -> ID nuevo (para actividades/promesas)
+        
+        # Verificar que el usuario ID 2 existe (gestor por defecto)
+        from app.features.users.models import User
+        gestor_default = User.query.get(2)
+        if not gestor_default:
+            print("   [WARN] Usuario con ID 2 no encontrado, los casos se importarán sin asignar")
+            gestor_default_id = None
+        else:
+            gestor_default_id = 2
+            print(f"   [INFO] Casos se asignarán automáticamente a: {gestor_default.username} (ID: {gestor_default.id})")
+        
         for case_data in data.get('cases', []):
             # Verificar si ya existe por nro_cliente
             nro_cliente = case_data.get('nro_cliente')
@@ -120,6 +131,11 @@ def import_data(json_file='data/export_for_prod.json'):
                     print(f"   [ERROR] No hay carteras disponibles, saltando caso")
                     continue
             
+            # Asignar assigned_to_id: usar el del export si existe, sino usar gestor_default_id (2)
+            assigned_to_id = case_data.get('assigned_to_id')
+            if not assigned_to_id and gestor_default_id:
+                assigned_to_id = gestor_default_id
+            
             new_case = Case(
                 nro_cliente=nro_cliente,
                 name=case_data['name'],
@@ -136,7 +152,7 @@ def import_data(json_file='data/export_for_prod.json'):
                 provincia=case_data.get('provincia'),
                 status_id=status_id,
                 cartera_id=cartera_id,
-                assigned_to_id=case_data.get('assigned_to_id'),
+                assigned_to_id=assigned_to_id,  # Usa el valor calculado (2 por defecto si no viene en export)
                 notes=case_data.get('notes')
             )
             db.session.add(new_case)
@@ -144,7 +160,7 @@ def import_data(json_file='data/export_for_prod.json'):
             if nro_cliente:
                 casos_map[nro_cliente] = new_case.id
             casos_importados += 1
-            print(f"   [OK] Caso '{nro_cliente}' importado (ID: {new_case.id})")
+            print(f"   [OK] Caso '{nro_cliente}' importado (ID: {new_case.id}, assigned_to_id: {assigned_to_id})")
         
         db.session.commit()
         print(f"   [SUCCESS] {casos_importados} casos nuevos importados, {casos_skipped} saltados (ya existían)\n")
