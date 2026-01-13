@@ -1,9 +1,16 @@
 # 📘 DOCUMENTACIÓN COMPLETA DEL SISTEMA
 ## Sistema de Gestión de Deudas - NOVA Gestión de Cobranzas
 
-**Última actualización:** Enero 2026  
-**Versión:** 1.0.0  
+**Última actualización:** 13 de Enero 2026  
+**Versión:** 1.1.0  
 **Propósito:** Documentación técnica completa para contexto y mantenimiento del sistema
+
+### Cambios Recientes (13/01/2026)
+- ✅ Scripts de exportación/importación de datos para producción
+- ✅ Asignación automática de casos al gestor (ID 2) en importación
+- ✅ Corrección de migraciones para soporte PostgreSQL (ON CONFLICT vs INSERT OR IGNORE)
+- ✅ Proceso completo de migración de datos documentado
+- ✅ Scripts de verificación de datos en producción
 
 ---
 
@@ -633,12 +640,22 @@ Gestiones MVP/
 ### Migraciones
 - **Alembic** configurado en `config/alembic.ini`
 - Migraciones en `migrations/versions/`
+- **Importante:** Las migraciones detectan automáticamente el tipo de BD:
+  - **PostgreSQL:** Usa `ON CONFLICT DO NOTHING` para inserts idempotentes
+  - **SQLite:** Usa `INSERT OR IGNORE` para inserts idempotentes
 - Comandos:
   ```bash
   alembic revision --autogenerate -m "descripción"
   alembic upgrade head
   alembic downgrade -1
   ```
+- **Migraciones principales:**
+  - `9064f0eb7540` - Add management_status (obsoleta, mantenida por compatibilidad)
+  - `20260112225202` - Create carteras table
+  - `20260112225203` - Migrate cases cartera to FK
+  - `20260112233643` - Refactor cases table and create case_statuses
+  - `20260112234500` - Add nro_cliente to cases
+  - `a390bb4da27e` - Add address and contact fields to cases
 
 ### Scripts de Datos
 - `scripts/dev/create_sample_data.py` - Crea datos de prueba
@@ -867,15 +884,72 @@ pytest -v --tb=short
 
 ### Scripts de Desarrollo
 - `scripts/dev/create_sample_data.py` - Crea datos de prueba
+- `scripts/dev/import_cases.py` - Importa casos desde datos tabulares
+- `scripts/dev/assign_cases.py` - Asigna casos a gestores
+- `scripts/dev/update_fechas_pago.py` - Actualiza fechas de último pago
+- `scripts/dev/update_dev_instance.sh` - Actualiza instancia de desarrollo (rebuild, migraciones)
+- `scripts/dev/fix_migration_status.sh` - Corrige estado de migraciones
 
-### Scripts de Migración
+### Scripts de Migración de Datos (Producción)
+- `scripts/prod/export_data_for_prod.py` - Exporta todos los datos desde develop a JSON
+  - Exporta: carteras, case_statuses, casos, usuarios, actividades, promesas
+  - Genera: `data/export_for_prod.json`
+  - Uso: `python scripts/prod/export_data_for_prod.py`
+  
+- `scripts/prod/import_data_to_prod.py` - Importa datos exportados a producción
+  - Importa: carteras, case_statuses, casos, actividades, promesas
+  - **Asigna automáticamente casos al gestor (ID 2)** si no tienen `assigned_to_id`
+  - Evita duplicados por `nro_cliente` y nombre
+  - Mapea correctamente actividades y promesas usando `nro_cliente`
+  - Uso: `docker exec gestiones-mvp-prod python3 scripts/prod/import_data_to_prod.py`
+  
+- `scripts/prod/verify_prod_data.py` - Verifica que los datos en producción están correctos
+  - Muestra resumen de todas las tablas
+  - Verifica relaciones y detecta problemas
+  - Uso: `docker exec gestiones-mvp-prod python3 scripts/prod/verify_prod_data.py`
+
+### Scripts de Migración (Alembic)
 - `scripts/migrations/migrate_dummy_data.py` - Migra datos dummy
 - `scripts/migrations/update_existing_cases_management_status.py` - Actualiza management_status
 
 ### Scripts de Setup
 - `scripts/setup/init-prod-db.sh` - Inicializa BD producción
+  - Espera a que PostgreSQL esté listo
+  - Ejecuta migraciones de Alembic automáticamente
+  - Crea datos por defecto (carteras, estados, usuarios)
 - `scripts/setup/setup-oracle-cloud.sh` - Setup inicial en OCI
 - `scripts/setup/verify_setup.py` - Verifica configuración
+
+### Proceso de Migración a Producción
+
+#### Paso 1: Exportar datos desde develop
+```bash
+git checkout develop
+python scripts/prod/export_data_for_prod.py
+# Genera: data/export_for_prod.json
+```
+
+#### Paso 2: Merge a main
+```bash
+git checkout main
+git merge develop
+git push origin main
+# Dispara deployment automático
+```
+
+#### Paso 3: Importar datos en producción
+```bash
+# Copiar archivo a producción
+scp -i privateKey.key data/export_for_prod.json ubuntu@<IP>:/home/ubuntu/gestiones/data/
+
+# En producción, importar
+docker exec gestiones-mvp-prod python3 scripts/prod/import_data_to_prod.py
+```
+
+#### Notas importantes:
+- Los casos se asignan automáticamente al gestor (ID 2) si no tienen `assigned_to_id`
+- Las actividades y promesas se mapean correctamente usando `nro_cliente`
+- Los usuarios NO se importan (se mantienen separados por seguridad)
 
 ---
 
@@ -947,6 +1021,57 @@ docker-compose up -d
 ```bash
 docker-compose build --no-cache
 docker-compose up -d
+```
+
+#### 4. Error: "syntax error at or near OR" en migraciones PostgreSQL
+**Causa:** Migración usa sintaxis SQLite (`INSERT OR IGNORE`) en PostgreSQL  
+**Solución:** Las migraciones ya están corregidas para detectar el tipo de BD automáticamente. Si persiste:
+```bash
+# Verificar migraciones aplicadas
+docker exec gestiones-mvp-prod alembic -c config/alembic.ini current
+
+# Si es necesario, marcar migración como aplicada
+docker exec gestiones-mvp-prod alembic -c config/alembic.ini stamp <revision>
+```
+
+#### 5. Error: "duplicate key value violates unique constraint" en PostgreSQL
+**Causa:** Restos de creación anterior fallida en PostgreSQL  
+**Solución:**
+```bash
+# Eliminar volumen de PostgreSQL
+docker-compose down
+docker volume rm docker_postgres_data
+docker-compose up -d
+# Ejecutar migraciones nuevamente
+docker exec gestiones-mvp-prod alembic -c config/alembic.ini upgrade head
+```
+
+#### 6. Error: "DB_PASSWORD variable is not set" en docker-compose
+**Causa:** docker-compose no está leyendo `.env.prod`  
+**Solución:**
+```bash
+# Usar flag --env-file explícitamente
+docker-compose -f config/docker/docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+#### 7. Casos no aparecen para gestores
+**Causa:** Casos tienen `assigned_to_id = None`  
+**Solución:**
+```bash
+# Asignar todos los casos al gestor (ID 2)
+docker exec gestiones-mvp-prod python3 -c "import sqlite3; conn = sqlite3.connect('/app/data/gestiones.db'); c = conn.cursor(); c.execute('UPDATE cases SET assigned_to_id = 2 WHERE assigned_to_id IS NULL'); conn.commit(); conn.close()"
+# O para PostgreSQL:
+docker exec gestiones-mvp-prod python3 << 'PYTHON'
+import sys; sys.path.insert(0, '/app')
+from app import create_app
+from app.core.database import db
+from app.features.cases.models import Case
+app = create_app()
+with app.app_context():
+    casos = Case.query.filter(Case.assigned_to_id.is_(None)).all()
+    for caso in casos: caso.assigned_to_id = 2
+    db.session.commit()
+PYTHON
 ```
 
 #### 4. Logo no aparece en producción
@@ -1082,9 +1207,35 @@ git log --oneline -10
 5. Backup (solo producción)
 6. `git pull`
 7. Rebuild Docker images
-8. Restart containers
-9. Health check
-10. Si falla: Rollback automático
+8. **Ejecuta migraciones de Alembic automáticamente** (producción)
+9. Restart containers
+10. Health check
+11. Si falla: Rollback automático
+
+### Flujo de Migración de Datos a Producción
+1. **Exportar datos desde develop:**
+   ```bash
+   python scripts/prod/export_data_for_prod.py
+   ```
+2. **Hacer merge a main:**
+   ```bash
+   git checkout main
+   git merge develop
+   git push origin main
+   ```
+3. **Esperar deployment automático** (ejecuta migraciones)
+4. **Copiar archivo JSON a producción:**
+   ```bash
+   scp -i privateKey.key data/export_for_prod.json ubuntu@<IP>:/home/ubuntu/gestiones/data/
+   ```
+5. **Importar datos:**
+   ```bash
+   docker exec gestiones-mvp-prod python3 scripts/prod/import_data_to_prod.py
+   ```
+6. **Verificar:**
+   ```bash
+   docker exec gestiones-mvp-prod python3 scripts/prod/verify_prod_data.py
+   ```
 
 ---
 
@@ -1119,6 +1270,15 @@ git log --oneline -10
 - [ ] Actualizar documentación si es necesario
 - [ ] Commit con mensaje descriptivo
 - [ ] Push y verificar CI/CD
+
+### Migración de Datos a Producción
+- [ ] Exportar datos desde develop: `python scripts/prod/export_data_for_prod.py`
+- [ ] Hacer merge a main y push
+- [ ] Esperar deployment automático (ejecuta migraciones)
+- [ ] Copiar `export_for_prod.json` a producción
+- [ ] Importar datos: `docker exec gestiones-mvp-prod python3 scripts/prod/import_data_to_prod.py`
+- [ ] Verificar datos: `docker exec gestiones-mvp-prod python3 scripts/prod/verify_prod_data.py`
+- [ ] Verificar que los casos están asignados al gestor correcto
 
 ### Deployment
 - [ ] Verificar que tests pasan en CI
