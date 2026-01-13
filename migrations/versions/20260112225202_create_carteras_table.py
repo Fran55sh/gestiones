@@ -36,13 +36,24 @@ def upgrade() -> None:
         op.create_index(op.f('ix_carteras_nombre'), 'carteras', ['nombre'], unique=True)
     
     # Insert default carteras (if they don't exist)
-    # For SQLite, use INSERT OR IGNORE instead of ON CONFLICT
-    op.execute("""
-        INSERT OR IGNORE INTO carteras (nombre, activo, created_at)
-        VALUES 
-            ('Cristal Cash', 1, CURRENT_TIMESTAMP),
-            ('Favacard', 1, CURRENT_TIMESTAMP)
-    """)
+    # Use ON CONFLICT DO NOTHING for PostgreSQL, INSERT OR IGNORE for SQLite
+    connection = op.get_bind()
+    if connection.dialect.name == 'postgresql':
+        op.execute("""
+            INSERT INTO carteras (nombre, activo, created_at)
+            VALUES 
+                ('Cristal Cash', true, CURRENT_TIMESTAMP),
+                ('Favacard', true, CURRENT_TIMESTAMP)
+            ON CONFLICT (nombre) DO NOTHING
+        """)
+    else:
+        # SQLite
+        op.execute("""
+            INSERT OR IGNORE INTO carteras (nombre, activo, created_at)
+            VALUES 
+                ('Cristal Cash', 1, CURRENT_TIMESTAMP),
+                ('Favacard', 1, CURRENT_TIMESTAMP)
+        """)
 
 
 def downgrade() -> None:
