@@ -125,11 +125,12 @@ def create_app() -> Flask:
 
     # CSRF - Habilitado por defecto en producción
     enable_csrf = _env_bool("ENABLE_CSRF", not app.debug)
+    csrf = None
     if enable_csrf:
         try:
             from flask_seasurf import SeaSurf
 
-            SeaSurf(app)
+            csrf = SeaSurf(app)
             logger.info("CSRF habilitado con Flask-SeaSurf")
         except Exception as e:
             logger.warning(f"ENABLE_CSRF activo pero Flask-SeaSurf no disponible: {e}")
@@ -169,6 +170,11 @@ def create_app() -> Flask:
 
     # Register API blueprints
     app.register_blueprint(api_v1_bp)
+
+    # API REST usa sesión + fetch JSON; sin token CSRF en cliente. Eximir blueprint API
+    # para no romper POST/PUT/DELETE (dashboard admin, etc.).
+    if csrf is not None:
+        csrf.exempt(api_v1_bp)
 
     # Error handlers
     @app.errorhandler(HTTPException)

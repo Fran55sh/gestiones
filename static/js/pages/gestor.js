@@ -1,4 +1,4 @@
-﻿// Dashboard Gestor - Integrado con APIs reales
+// Dashboard Gestor - Integrado con APIs reales
 
 // Variables globales
 let clienteActual = null;  // Cliente actual (datos del cliente)
@@ -152,15 +152,16 @@ function mapCaseToCliente(caseData) {
         }
     }
     
-    // Calcular meses de mora
+    // Meses de mora (solo informativo; ya no capitalizan interés automático)
     const mesesMora = calcularMesesMora(caseData.fecha_ultimo_pago);
-    
-    // Calcular monto total con interés simple del 5% mensual
-    // Fórmula: monto * (1 + 0.05 * meses_mora) = monto + (monto * 0.05 * meses_mora)
-    const montoBase = parseFloat(caseData.total) || 0;
-    const interesMensual = 0.05; // 5%
-    const montoConInteres = montoBase * (1 + interesMensual * mesesMora);
-    
+
+    const totalCapital = parseFloat(caseData.total) || 0;
+    let montoInicialParsed = NaN;
+    if (caseData.monto_inicial != null && caseData.monto_inicial !== '') {
+        const p = parseFloat(caseData.monto_inicial);
+        if (!Number.isNaN(p)) montoInicialParsed = p;
+    }
+
     return {
         id: caseData.id,
         nombre: `${caseData.name || ''} ${caseData.lastname || ''}`.trim() || 'N/A',
@@ -173,9 +174,9 @@ function mapCaseToCliente(caseData) {
         provincia: caseData.provincia || 'N/A',
         cp: caseData.cp || 'N/A',
         fechaNacimiento: 'N/A',  // No está en el modelo Case
-        montoBase: montoBase,  // Monto original sin interés (campo "total")
-        montoInicial: parseFloat(caseData.monto_inicial) || 0,  // Monto inicial
-        montoAdeudado: montoConInteres,  // Monto con interés aplicado
+        montoBase: totalCapital,  // Campo "total" del caso (referencia)
+        montoInicial: Number.isNaN(montoInicialParsed) ? 0 : montoInicialParsed,
+        montoAdeudado: totalCapital,  // Columna total en BD; intereses solo vía calculadora
         fechaVencimiento: fechaUltimoPagoFormateada,  // Mostrar fecha último pago
         ultimaGestion: ultimaGestion,  // Se actualizará desde loadActivities
         cuotasPendientes: 0,  // No está en el modelo Case
@@ -739,7 +740,7 @@ function loadCliente(cliente, indice) {
     if (debtNroClienteEl) debtNroClienteEl.textContent = deudaActual.numeroId || 'N/A';
     if (debtCarteraEl) debtCarteraEl.textContent = deudaActual.cartera || 'N/A';
     
-    // Monto con interés aplicado (5% mensual según meses de mora) - usar deudaActual (de esta deuda específica)
+    // Monto adeudado (sin interés automático por mora)
     if (debtAmountEl) debtAmountEl.textContent = `$${deudaActual.montoAdeudado.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     if (debtDueDateEl) debtDueDateEl.textContent = deudaActual.fechaVencimiento;
     if (debtLastMgmtEl) debtLastMgmtEl.textContent = deudaActual.ultimaGestion;
@@ -757,17 +758,13 @@ function loadCliente(cliente, indice) {
         summaryMontoInicialEl.textContent = `$${(deudaActual.montoInicial || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     if (summaryMontoAdeudadoEl) {
-        summaryMontoAdeudadoEl.textContent = `$${(deudaActual.montoBase || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        summaryMontoAdeudadoEl.textContent = `$${(deudaActual.montoAdeudado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
-    if (summaryMontoInteresesEl) {
-        // Monto con intereses (montoAdeudado ya incluye los intereses calculados)
-        summaryMontoInteresesEl.textContent = `$${(deudaActual.montoAdeudado || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    }
-    
-    // Actualizar calculadora de intereses - usar deudaActual
+    // "Monto con intereses" en resumen: lo actualiza calcularIntereses() según la calculadora
+
+    // Calculadora: monto base = adeudado; interés por defecto 0% en el HTML
     const calcMontoTotalEl = document.getElementById('calc-monto-total');
     if (calcMontoTotalEl) {
-        // Formatear a 2 decimales
         const montoFormateado = (deudaActual.montoAdeudado || 0).toFixed(2);
         calcMontoTotalEl.value = montoFormateado;
         calcularIntereses();
@@ -1590,6 +1587,8 @@ window.calcularIntereses = function() {
     if (montoTotal <= 0) {
         totalAbonarEl.textContent = '$0.00';
         montoCuotaEl.textContent = '$0.00';
+        const summaryEmpty = document.getElementById('summary-monto-intereses');
+        if (summaryEmpty) summaryEmpty.textContent = '$0.00';
         return;
     }
     
@@ -1602,6 +1601,13 @@ window.calcularIntereses = function() {
     const montoCuota = totalAbonar / cantidadCuotas;
     
     // Formatear y mostrar resultados
-    totalAbonarEl.textContent = `$${totalAbonar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const totalFmt = `$${totalAbonar.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    totalAbonarEl.textContent = totalFmt;
     montoCuotaEl.textContent = `$${montoCuota.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    // Resumen superior: "Monto con Intereses" = resultado de la calculadora únicamente
+    const summaryInteresesEl = document.getElementById('summary-monto-intereses');
+    if (summaryInteresesEl) {
+        summaryInteresesEl.textContent = totalFmt;
+    }
 };

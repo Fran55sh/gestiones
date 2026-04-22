@@ -54,8 +54,14 @@
         </div>
     </header>
 
+    <nav class="admin-view-tabs" aria-label="Vista principal">
+        <button type="button" class="admin-view-tab active" data-admin-view="resumen">Resumen</button>
+        <button type="button" class="admin-view-tab" data-admin-view="datos">Gestión de datos</button>
+    </nav>
+
     <!-- MAIN CONTENT -->
     <main class="main-content">
+        <div id="admin-panel-resumen" class="admin-panel">
         <!-- FILTER CHIPS -->
         <div class="sidebar-filters">
             <div class="filter-chip active" onclick="toggleFilter(this)">Todas las carteras</div>
@@ -255,6 +261,74 @@
                 <canvas id="comparisonChart"></canvas>
             </div>
         </div>
+        </div>
+
+        <div id="admin-panel-datos" class="admin-panel admin-panel-datos" hidden>
+            <div class="data-subnav">
+                <button type="button" class="data-subnav-btn active" data-data-section="casos">Casos</button>
+                <button type="button" class="data-subnav-btn" data-data-section="carteras">Carteras</button>
+                <button type="button" class="data-subnav-btn" data-data-section="import">Importar CSV</button>
+            </div>
+
+            <div id="data-section-casos" class="data-section">
+                <div class="data-toolbar">
+                    <div class="data-toolbar-row">
+                        <input type="search" id="casesSearchInput" class="data-search-input" placeholder="Buscar por nombre, apellido, DNI o Nº cliente…" autocomplete="off">
+                        <button type="button" id="btnNewCase" class="btn-primary">Nuevo caso</button>
+                    </div>
+                </div>
+                <div class="data-table-wrap">
+                    <table class="data-table" id="casesTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Cliente</th>
+                                <th>DNI</th>
+                                <th>Nº cliente</th>
+                                <th>Total</th>
+                                <th>Cartera</th>
+                                <th>Estado</th>
+                                <th>Gestor</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="casesTableBody">
+                            <tr><td colspan="9" class="data-table-empty">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="data-pagination" id="casesPagination">
+                    <button type="button" id="casesPagePrev" disabled>Anterior</button>
+                    <span id="casesPageInfo"></span>
+                    <button type="button" id="casesPageNext" disabled>Siguiente</button>
+                </div>
+            </div>
+
+            <div id="data-section-carteras" class="data-section" hidden>
+                <div class="form-section data-cartera-form">
+                    <h3 class="data-section-title">Agregar cartera</h3>
+                    <form id="addCarteraFormData" class="data-inline-form">
+                        <input type="text" id="newCarteraNombreData" placeholder="Nombre de la cartera" required>
+                        <button type="submit" class="btn-primary">Agregar</button>
+                    </form>
+                </div>
+                <h3 class="data-section-title">Carteras existentes</h3>
+                <div id="carterasListData" class="carteras-list-data"></div>
+            </div>
+
+            <div id="data-section-import" class="data-section" hidden>
+                <div class="form-section data-cartera-form">
+                    <h3 class="data-section-title">Importar casos desde CSV</h3>
+                    <p class="data-import-hint">Obligatorios por fila: <code>name</code>, <code>lastname</code>, <code>total</code> y <code>cartera_id</code> o <code>cartera_nombre</code>. Codificación UTF-8. Si <code>nro_cliente</code> ya existe, la fila se omite.</p>
+                    <div class="data-import-actions">
+                        <button type="button" class="btn-secondary" id="btnDownloadCsvTemplate">Descargar plantilla</button>
+                        <input type="file" id="casesCsvFile" accept=".csv,text/csv" class="data-file-input">
+                        <button type="button" class="btn-primary" id="btnCasesCsvImport">Importar</button>
+                    </div>
+                    <div id="casesCsvResult" class="data-import-result" hidden></div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- FOOTER -->
@@ -265,53 +339,46 @@
         <div class="footer-links">
             <a href="#" onclick="exportReport('excel')">📥 Exportar Excel</a>
             <a href="#" onclick="exportReport('pdf')">📄 Exportar PDF</a>
-            <a href="#" onclick="openCarterasModal()">📁 Gestionar Carteras</a>
+            <a href="#" onclick="openAdminDataTab('carteras'); return false;">📁 Gestionar datos</a>
         </div>
     </footer>
 
-    <!-- MODAL GESTIÓN DE CARTERAS -->
-    <div id="carterasModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; flex-direction: column;">
-        <div class="modal-content" style="background: white; border-radius: 0.5rem; padding: 2rem; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2 style="margin: 0;">Gestión de Carteras</h2>
-                <button class="modal-close" onclick="closeCarterasModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+    <div id="caseFormModal" class="modal case-form-modal" role="dialog" aria-modal="true" aria-labelledby="caseFormTitle">
+        <div class="modal-content modal-content-wide">
+            <div class="modal-header">
+                <h2 id="caseFormTitle">Nuevo caso</h2>
+                <button type="button" class="modal-close" id="caseFormModalClose" aria-label="Cerrar">&times;</button>
             </div>
-            <div class="modal-body">
-                <!-- Formulario para agregar nueva cartera -->
-                <div class="form-section" style="margin-bottom: 2rem; padding: 1rem; background: #f8fafc; border-radius: 0.5rem;">
-                    <h3 style="margin: 0 0 1rem 0;">Agregar Nueva Cartera</h3>
-                    <form id="addCarteraForm" onsubmit="addCartera(event); return false;">
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input 
-                                type="text" 
-                                id="newCarteraNombre" 
-                                placeholder="Nombre de la cartera" 
-                                required
-                                style="flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; font-size: 0.875rem;"
-                            >
-                            <button 
-                                type="submit"
-                                style="padding: 0.75rem 1.5rem; background: #667eea; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-weight: 600; font-size: 0.875rem;"
-                            >
-                                Agregar
-                            </button>
-                        </div>
-                    </form>
+            <form id="caseForm" class="case-form">
+                <input type="hidden" name="case_id" id="caseFormCaseId" value="">
+                <div class="case-form-grid">
+                    <label>Nombre <span class="req">*</span><input type="text" name="name" id="caseName" required></label>
+                    <label>Apellido <span class="req">*</span><input type="text" name="lastname" id="caseLastname" required></label>
+                    <label>DNI<input type="text" name="dni" id="caseDni"></label>
+                    <label>Nº cliente<input type="text" name="nro_cliente" id="caseNroCliente"></label>
+                    <label>Total <span class="req">*</span><input type="number" name="total" id="caseTotal" step="0.01" min="0" required></label>
+                    <label>Monto inicial<input type="number" name="monto_inicial" id="caseMontoInicial" step="0.01" min="0"></label>
+                    <label>Último pago<input type="date" name="fecha_ultimo_pago" id="caseFechaUltimoPago"></label>
+                    <label>Teléfono<input type="text" name="telefono" id="caseTelefono"></label>
+                    <label>Calle<input type="text" name="calle_nombre" id="caseCalleNombre"></label>
+                    <label>Nº<input type="text" name="calle_nro" id="caseCalleNro"></label>
+                    <label>Localidad<input type="text" name="localidad" id="caseLocalidad"></label>
+                    <label>CP<input type="text" name="cp" id="caseCp"></label>
+                    <label>Provincia<input type="text" name="provincia" id="caseProvincia"></label>
+                    <label>Cartera <span class="req">*</span><select name="cartera_id" id="caseCarteraId" required></select></label>
+                    <label>Estado<select name="status_id" id="caseStatusId"></select></label>
+                    <label>Gestor asignado<select name="assigned_to_id" id="caseAssignedToId"><option value="">— Sin asignar —</option></select></label>
                 </div>
-
-                <!-- Lista de carteras -->
-                <div class="carteras-list-section">
-                    <h3 style="margin: 0 0 1rem 0;">Carteras Existentes</h3>
-                    <div id="carterasList" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <div style="padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem; text-align: center; color: #64748b;">
-                            Cargando carteras...
-                        </div>
-                    </div>
+                <label class="case-form-notes">Notas<textarea name="notes" id="caseNotes" rows="3"></textarea></label>
+                <div class="case-form-actions">
+                    <button type="button" class="btn-secondary" id="caseFormCancel">Cancelar</button>
+                    <button type="submit" class="btn-primary" id="caseFormSubmit">Guardar</button>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 
     <script src="/static/js/pages/admin.js"></script>
+    <script src="/static/js/pages/admin-data.js"></script>
 </body>
 </html>

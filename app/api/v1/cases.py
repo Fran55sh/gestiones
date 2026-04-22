@@ -3,7 +3,7 @@ Endpoints API para datos del dashboard y casos.
 """
 
 from datetime import datetime
-from flask import request, jsonify, session
+from flask import request, jsonify, session, Response
 from flask import current_app as app
 from sqlalchemy import or_
 
@@ -26,6 +26,7 @@ from ...utils.security import require_role
 from ...utils.exceptions import ValidationError
 from ...services.audit import audit_log
 from ...services.cache import invalidate_cache
+from ...utils.case_csv_import import csv_template_body, parse_cases_csv
 
 # Use the parent blueprint from __init__.py
 from . import bp
@@ -275,6 +276,60 @@ def list_cases():
     except Exception as e:
         app.logger.error(f"Error listando casos: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route("/cases/import-template")
+@require_role("admin")
+def cases_import_template():
+    """Descarga CSV de plantilla para importación masiva de casos."""
+    body = "\ufeff" + csv_template_body()
+    return Response(
+        body,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="casos_plantilla.csv"'},
+    )
+
+
+@bp.route("/cases/import", methods=["POST"])
+@require_role("admin")
+def cases_import_csv():
+    """Importa casos desde archivo CSV (multipart campo file). Solo admin."""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "Falta el archivo (campo file)", "imported": 0, "skipped": 0, "errors": []}), 400
+        upload = request.files["file"]
+        if not upload or not upload.filename:
+            return jsonify({"success": False, "error": "Archivo vacío", "imported": 0, "skipped": 0, "errors": []}), 400
+
+        imported, skipped, errors = parse_cases_csv(upload.stream)
+
+        fatal = errors and imported == 0 and skipped == 0 and len(errors) == 1 and errors[0].get("row") == 0
+        if fatal:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "imported": 0,
+                        "skipped": 0,
+                        "errors": errors,
+                        "error": errors[0].get("message", "Error al procesar el archivo"),
+                    }
+                ),
+                400,
+            )
+
+        if imported or skipped:
+            invalidate_cache("cache:dashboard:*")
+            invalidate_cache("cache:kpis:*")
+        audit_log(
+            "cases_csv_import",
+            {"imported": imported, "skipped": skipped, "errors_count": len(errors)},
+        )
+
+        return jsonify({"success": True, "imported": imported, "skipped": skipped, "errors": errors})
+    except Exception as e:
+        app.logger.error(f"Error importando CSV de casos: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e), "imported": 0, "skipped": 0, "errors": []}), 500
 
 
 @bp.route("/cases", methods=["POST"])
