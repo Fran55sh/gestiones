@@ -1,13 +1,26 @@
 # 📘 DOCUMENTACIÓN COMPLETA DEL SISTEMA
 ## Sistema de Gestión de Deudas - NOVA Gestión de Cobranzas
 
-**Última actualización:** 13 de Enero 2026  
-**Versión:** 1.1.0  
+**Última actualización:** 21 de Abril 2026  
+**Versión:** 1.2.0  
 **Propósito:** Documentación técnica completa para contexto y mantenimiento del sistema
 
+### Cambios Recientes (21/04/2026)
+
+- ✅ **Importación masiva de casos por CSV** desde el dashboard admin (solo rol `admin`), sin dependencias extra (módulo estándar `csv`).
+- ✅ Endpoints: `GET /api/cases/import-template` (plantilla descargable con BOM UTF-8), `POST /api/cases/import` (multipart, campo `file`).
+- ✅ Lógica en `app/utils/case_csv_import.py`: límites (tamaño de archivo y cantidad de filas), UTF-8 con BOM / latin-1, parseo de montos y fechas, resolución de cartera por `cartera_id` o `cartera_nombre` (cartera activa), omisión de filas si `nro_cliente` ya existe, commit por fila, invalidación de caché KPI y registro en auditoría al finalizar.
+- ✅ **Alias de columnas** aceptados además de los nombres canónicos: `calle` → calle, `ptovincia` → provincia, `assigned_to` → `assigned_to_id` (además de `nombre`/`apellido` para nombre y apellido).
+- ✅ **API de gestores:** `GET /api/users/gestores` — lista `{ id, username }` de usuarios con rol gestor activos (admin), para selects de asignación.
+- ✅ **Frontend admin:** sección “Datos” con subpestañas Casos, Carteras e **Importar CSV**; lógica en `static/js/pages/admin-data.js` (plantilla, `FormData` + `fetch` al import).
+- ✅ **Tests de integración:** `tests/integration/test_cases_csv_import.py` (plantilla autenticada, importación mínima, duplicados `nro_cliente`, alias de columnas).
+- ✅ Archivo de ejemplo en raíz: `casos_plantilla.csv` (referencia manual; la plantilla oficial se obtiene desde la app).
+- ✅ Rama `develop` integrada en `main` con la funcionalidad anterior (abril 2026).
+
 ### Cambios Recientes (13/01/2026)
+
 - ✅ Scripts de exportación/importación de datos para producción
-- ✅ Asignación automática de casos al gestor (ID 2) en importación
+- ✅ Asignación automática de casos al gestor (ID 2) en importación por script
 - ✅ Corrección de migraciones para soporte PostgreSQL (ON CONFLICT vs INSERT OR IGNORE)
 - ✅ Proceso completo de migración de datos documentado
 - ✅ Scripts de verificación de datos en producción
@@ -46,6 +59,7 @@ Sistema completo de gestión de deudas desarrollado en Flask (Python) con arquit
 - ✅ **Dashboard de gestor** personalizado con herramientas de productividad
 - ✅ **Panel de usuario** básico
 - ✅ **API REST** completa para gestión de casos, promesas y actividades
+- ✅ **Importación masiva de casos (CSV)** desde el panel admin, con plantilla y resumen de importados / omitidos / errores por fila
 - ✅ **Base de datos** PostgreSQL (producción) / SQLite (desarrollo)
 - ✅ **Deployment automatizado** con GitHub Actions
 - ✅ **Containerización** completa con Docker
@@ -214,8 +228,9 @@ Gestiones MVP/
 │   │
 │   ├── api/                     # Blueprints para API REST
 │   │   └── v1/
-│   │       ├── __init__.py     # Blueprint principal API v1
-│   │       ├── cases.py        # Endpoints de casos
+│   │       ├── __init__.py     # Blueprint `url_prefix=/api`
+│   │       ├── cases.py        # Casos, dashboard, import CSV
+│   │       ├── users.py        # Listado de gestores (admin)
 │   │       └── activities.py   # Endpoints de actividades
 │   │
 │   ├── services/                # Lógica de negocio
@@ -229,6 +244,7 @@ Gestiones MVP/
 │   ├── utils/                   # Utilidades
 │   │   ├── security.py         # Decoradores de seguridad (@require_role)
 │   │   ├── validators.py       # Validaciones de entrada
+│   │   ├── case_csv_import.py # Parseo e importación CSV de casos (admin)
 │   │   ├── cache.py            # Utilidades de cache
 │   │   ├── audit.py            # Utilidades de auditoría
 │   │   ├── error_handler.py    # Manejo de errores
@@ -264,7 +280,8 @@ Gestiones MVP/
 │       ├── pages/              # JavaScript por página
 │       │   ├── index.js
 │       │   ├── login.js
-│       │   ├── admin.js
+│       │   ├── admin.js        # Shell del dashboard admin (pestañas)
+│       │   ├── admin-data.js   # Datos: casos, carteras, import CSV
 │       │   ├── gestor.js
 │       │   └── user.js
 │       └── utils/              # Utilidades JS
@@ -317,7 +334,8 @@ Gestiones MVP/
 │       ├── test_auth.py
 │       ├── test_api.py
 │       ├── test_contact.py
-│       └── test_dashboard_service.py
+│       ├── test_dashboard_service.py
+│       └── test_cases_csv_import.py  # Import CSV de casos
 │
 ├── docs/                        # Documentación
 │   ├── architecture/
@@ -337,6 +355,7 @@ Gestiones MVP/
 ├── .env.prod                   # Variables producción (gitignored)
 ├── .gitignore                  # Archivos ignorados
 ├── README.md                   # Documentación principal
+├── casos_plantilla.csv         # Ejemplo manual de columnas (opcional)
 └── SISTEMA.md                  # Este archivo
 ```
 
@@ -484,34 +503,39 @@ Gestiones MVP/
 - `GET /logo-dark.png` - Logo oscuro
 
 ### API Routes (REST JSON)
-**Prefijo:** `/api/v1`  
+**Prefijo URL:** `/api` (código en `app/api/v1/`, blueprint con `url_prefix="/api"`).  
 **Blueprint:** `app/api/v1/*`
 
 #### Dashboard (`api/v1/cases.py`)
-- `GET /api/v1/dashboard/kpis` - KPIs del dashboard (admin)
-- `GET /api/v1/dashboard/charts/performance` - Datos gráfico rendimiento (admin)
-- `GET /api/v1/dashboard/charts/cartera` - Distribución por cartera (admin)
-- `GET /api/v1/dashboard/gestores/ranking` - Ranking de gestores (admin)
-- `GET /api/v1/dashboard/stats/comparison` - Comparativa temporal (admin)
-- `GET /api/v1/dashboard/cases/status` - Distribución de estados (admin)
+- `GET /api/dashboard/kpis` - KPIs del dashboard (admin)
+- `GET /api/dashboard/charts/performance` - Datos gráfico rendimiento (admin)
+- `GET /api/dashboard/charts/cartera` - Distribución por cartera (admin)
+- `GET /api/dashboard/gestores/ranking` - Ranking de gestores (admin)
+- `GET /api/dashboard/stats/comparison` - Comparativa temporal (admin)
+- `GET /api/dashboard/cases/status` - Distribución de estados (admin)
 
 #### Casos (`api/v1/cases.py`)
-- `GET /api/v1/cases` - Listar casos (con filtros)
-- `POST /api/v1/cases` - Crear caso (admin)
-- `GET /api/v1/cases/<id>` - Obtener caso específico
-- `PUT /api/v1/cases/<id>` - Actualizar caso
-- `DELETE /api/v1/cases/<id>` - Eliminar caso (admin)
-- `GET /api/v1/cases/gestor` - Casos asignados al gestor actual (gestor)
-- `POST /api/v1/update-status` - Actualizar estado de caso
-- `POST /api/v1/register-management` - Registrar gestión de caso
+- `GET /api/cases` - Listar casos (con filtros)
+- `POST /api/cases` - Crear caso (admin)
+- `GET /api/cases/import-template` - Descargar CSV con fila de encabezados (admin)
+- `POST /api/cases/import` - Importar casos desde archivo CSV multipart (`file`) (admin)
+- `GET /api/cases/<id>` - Obtener caso específico
+- `PUT /api/cases/<id>` - Actualizar caso
+- `DELETE /api/cases/<id>` - Eliminar caso (admin)
+- `GET /api/cases/gestor` - Casos asignados al gestor actual (gestor)
+- `POST /api/update-status` - Actualizar estado de caso
+- `POST /api/register-management` - Registrar gestión de caso
+
+#### Usuarios / gestores (`api/v1/users.py`)
+- `GET /api/users/gestores` - Lista gestores activos (`id`, `username`) para asignación de casos (admin)
 
 #### Promesas (`api/v1/cases.py`)
-- `POST /api/v1/cases/<id>/promises` - Crear promesa de pago
+- `POST /api/cases/<id>/promises` - Crear promesa de pago
 
 #### Actividades (`api/v1/cases.py`, `api/v1/activities.py`)
-- `POST /api/v1/cases/<id>/activities` - Crear actividad
-- `GET /api/v1/activities/case/<id>` - Listar actividades de un caso
-- `DELETE /api/v1/activities/<id>` - Eliminar actividad
+- `POST /api/cases/<id>/activities` - Crear actividad
+- `GET /api/activities/case/<id>` - Listar actividades de un caso
+- `DELETE /api/activities/<id>` - Eliminar actividad
 
 #### Health Check
 - `GET /healthz` - Health check (público)
@@ -590,7 +614,8 @@ Gestiones MVP/
 - 5 gráficos interactivos
 - Filtros dinámicos
 - Tabla de ranking
-- JavaScript: `static/js/pages/admin.js`
+- Sección **Datos** (subpestañas): **Casos**, **Carteras**, **Importar CSV** (archivo `.csv`, descarga de plantilla, resultado de importación)
+- JavaScript: `static/js/pages/admin.js` (navegación y KPIs), `static/js/pages/admin-data.js` (tablas, carteras e import CSV)
 
 #### `dashboard-gestor.html`
 - Dashboard personalizado para gestores
@@ -866,6 +891,9 @@ pytest --cov=app --cov-report=html
 # Tests específicos
 pytest tests/test_auth.py -v
 
+# Import CSV (integración)
+pytest tests/integration/test_cases_csv_import.py -v
+
 # Con más detalle
 pytest -v --tb=short
 ```
@@ -881,6 +909,16 @@ pytest -v --tb=short
 ### Scripts de Deployment
 - `scripts/deploy/deploy.sh` - Script de deployment manual
 - `scripts/deploy/install-oci.sh` - Instalación en OCI
+
+### Importación masiva de casos (panel admin, CSV)
+
+Flujo distinto a los scripts por consola: el admin sube un CSV UTF-8 (con BOM permitido) por `POST /api/cases/import`. Implementación: `app/utils/case_csv_import.py`.
+
+**Columnas canónicas** (ver también `CSV_TEMPLATE_HEADERS` en ese módulo): `name`, `lastname`, `total` (obligatorios); `cartera_id` **o** `cartera_nombre` (obligatorio uno de los dos); opcionales `monto_inicial`, `dni`, `nro_cliente`, `telefono`, `calle_nombre`, `calle_nro`, `localidad`, `cp`, `provincia`, `fecha_ultimo_pago`, `notes`, `status_id` (por defecto 1 si falta), `assigned_to_id`. Alias aceptados: `nombre`/`apellido`, `calle`, `ptovincia`, `assigned_to`.
+
+**Reglas:** si `nro_cliente` viene informado y ya existe un caso con ese número, la fila se **omite**; si viene vacío, no se aplica ese criterio. Respuesta JSON: `imported`, `skipped`, `errors` (con número de fila). Límites: tamaño máximo de archivo y tope de filas definidos en constantes del módulo.
+
+**No confundir con:** `scripts/dev/import_cases.py` ni `scripts/prod/import_data_to_prod.py` (JSON / otros formatos y uso operativo batch).
 
 ### Scripts de Desarrollo
 - `scripts/dev/create_sample_data.py` - Crea datos de prueba
@@ -1186,16 +1224,17 @@ git log --oneline -10
 ### Flujo de Dashboard Admin
 1. Usuario autenticado como admin → `GET /dashboard-admin`
 2. Template carga → JavaScript inicializa
-3. JavaScript hace requests a `/api/v1/dashboard/*`
+3. JavaScript hace requests a `/api/dashboard/*`
 4. Backend calcula KPIs y datos
 5. Frontend renderiza gráficos y tablas
 6. Filtros actualizan datos dinámicamente
+7. En **Datos → Importar CSV**: descarga de plantilla `GET /api/cases/import-template`, envío `POST /api/cases/import` con `FormData`, muestra resumen y refresca listado de casos si hubo importaciones
 
 ### Flujo de Gestión de Caso (Gestor)
 1. Gestor accede a `/dashboard-gestor`
 2. Ve lista de casos asignados
 3. Click en caso → Modal con detalles
-4. Realiza acción (llamada, promesa, pago) → `POST /api/v1/*`
+4. Realiza acción (llamada, promesa, pago) → `POST /api/*`
 5. Backend actualiza BD
 6. Frontend actualiza UI sin recargar
 
@@ -1252,7 +1291,7 @@ git log --oneline -10
 ### Documentación Interna
 - `README.md` - Documentación principal del proyecto
 - `docs/` - Documentación adicional
-- `RESUMEN.md` - Resumen del sistema
+- `SISTEMA.md` - Este documento (referencia técnica completa)
 
 ---
 

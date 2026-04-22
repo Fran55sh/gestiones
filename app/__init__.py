@@ -39,6 +39,31 @@ def _env_list(name: str, default_list):
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _merge_db_password_into_url(database_url: str) -> str:
+    """
+    Si DATABASE_URL es PostgreSQL pero la contraseña en la URL está vacía y existe
+    DB_PASSWORD o POSTGRES_PASSWORD en el entorno, completa la URL (p. ej. Docker Compose
+    que interpoló ${DB_PASSWORD} vacío en el host y pisó .env.prod).
+    """
+    if not database_url or not database_url.startswith("postgres"):
+        return database_url
+    pw = os.environ.get("DB_PASSWORD") or os.environ.get("POSTGRES_PASSWORD")
+    if not pw:
+        return database_url
+    from urllib.parse import quote, urlparse, urlunparse
+
+    parsed = urlparse(database_url)
+    if not parsed.hostname:
+        return database_url
+    if parsed.password:
+        return database_url
+    user = parsed.username or ""
+    port = f":{parsed.port}" if parsed.port else ""
+    auth = f"{quote(user, safe='')}:{quote(pw, safe='')}"
+    netloc = f"{auth}@{parsed.hostname}{port}"
+    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+
 def create_app() -> Flask:
     # Paths
     package_dir = Path(__file__).parent
@@ -80,6 +105,8 @@ def create_app() -> Flask:
         data_dir = project_root / "data"
         data_dir.mkdir(exist_ok=True)
         database_url = f"sqlite:///{data_dir / 'gestiones.db'}"
+    else:
+        database_url = _merge_db_password_into_url(database_url)
 
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
