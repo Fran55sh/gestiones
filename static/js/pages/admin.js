@@ -1,4 +1,8 @@
-﻿// Dashboard Admin - Integrado con APIs reales
+// Dashboard Admin - Integrado con APIs reales
+
+function adminFetch(url, options) {
+    return fetch(url, Object.assign({}, { credentials: 'same-origin' }, options));
+}
 
 // Variables globales
 let performanceChart, carteraChart, comparisonChart;
@@ -43,7 +47,7 @@ async function loadKPIs() {
         if (currentFilters.cartera_id) params.append('cartera_id', currentFilters.cartera_id);
         if (currentFilters.gestor_id) params.append('gestor_id', currentFilters.gestor_id);
         
-        const response = await fetch(`/api/dashboard/kpis?${params}`);
+        const response = await adminFetch(`/api/dashboard/kpis?${params}`);
         const result = await response.json();
         
         if (result.success) {
@@ -82,7 +86,7 @@ async function loadPerformanceChart() {
         if (currentFilters.end_date) params.append('end_date', currentFilters.end_date);
         if (currentFilters.cartera_id) params.append('cartera_id', currentFilters.cartera_id);
         
-        const response = await fetch(`/api/dashboard/charts/performance?${params}`);
+        const response = await adminFetch(`/api/dashboard/charts/performance?${params}`);
         const result = await response.json();
         
         if (result.success) {
@@ -123,7 +127,7 @@ async function loadPerformanceChart() {
 // Cargar gráfico de cartera
 async function loadCarteraChart() {
     try {
-        const response = await fetch('/api/dashboard/charts/cartera');
+        const response = await adminFetch('/api/dashboard/charts/cartera');
         const result = await response.json();
         
         if (result.success) {
@@ -164,7 +168,7 @@ async function loadCarteraChart() {
 // Cargar gráfico de comparación
 async function loadComparisonChart() {
     try {
-        const response = await fetch('/api/dashboard/stats/comparison');
+        const response = await adminFetch('/api/dashboard/stats/comparison');
         const result = await response.json();
         
         if (result.success) {
@@ -227,7 +231,7 @@ async function loadComparisonChart() {
 // Cargar ranking de gestores
 async function loadGestoresRanking() {
     try {
-        const response = await fetch('/api/dashboard/gestores/ranking?limit=10');
+        const response = await adminFetch('/api/dashboard/gestores/ranking?limit=10');
         const result = await response.json();
         
         if (result.success) {
@@ -351,148 +355,10 @@ function showSuccess(message) {
     }, 3000);
 }
 
-// ==================== GESTIÓN DE CARTERAS ====================
-
-// Abrir modal de carteras
-function openCarterasModal() {
-    const modal = document.getElementById('carterasModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        loadCarteras();
-    }
-}
-
-// Cerrar modal de carteras
-function closeCarterasModal() {
-    const modal = document.getElementById('carterasModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
-// Cerrar modal al hacer clic fuera
-document.addEventListener('click', function(event) {
-    const modal = document.getElementById('carterasModal');
-    if (modal && event.target === modal) {
-        closeCarterasModal();
-    }
-});
-
-// Cargar lista de carteras
-async function loadCarteras() {
-    try {
-        const response = await fetch('/api/carteras');
-        if (!response.ok) {
-            throw new Error('Error al cargar carteras');
-        }
-        const carteras = await response.json();
-        renderCarterasList(carteras);
-    } catch (error) {
-        console.error('Error cargando carteras:', error);
-        const list = document.getElementById('carterasList');
-        if (list) {
-            list.innerHTML = '<div style="padding: 0.75rem; background: #fee2e2; border-radius: 0.5rem; color: #dc2626;">Error al cargar carteras</div>';
-        }
-    }
-}
-
-// Renderizar lista de carteras
-function renderCarterasList(carteras) {
-    const list = document.getElementById('carterasList');
-    if (!list) return;
-
-    if (carteras.length === 0) {
-        list.innerHTML = '<div style="padding: 0.75rem; background: #f8fafc; border-radius: 0.5rem; text-align: center; color: #64748b;">No hay carteras registradas</div>';
-        return;
-    }
-
-    list.innerHTML = carteras.map(cartera => `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: ${cartera.activo ? '#f0fdf4' : '#fef2f2'}; border: 1px solid ${cartera.activo ? '#bbf7d0' : '#fecaca'}; border-radius: 0.5rem;">
-            <div>
-                <div style="font-weight: 600; color: #1e293b;">${cartera.nombre}</div>
-                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.25rem;">
-                    ${cartera.activo ? '✅ Activa' : '❌ Inactiva'}
-                </div>
-            </div>
-            <button 
-                onclick="deleteCartera(${cartera.id}, '${cartera.nombre}', ${cartera.activo})"
-                style="padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; font-weight: 600;"
-            >
-                ${cartera.activo ? 'Desactivar' : 'Eliminar'}
-            </button>
-        </div>
-    `).join('');
-}
-
-// Agregar nueva cartera
-async function addCartera(event) {
-    event.preventDefault();
-    const input = document.getElementById('newCarteraNombre');
-    const nombre = input.value.trim();
-
-    if (!nombre) {
-        showError('El nombre de la cartera es requerido');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/carteras', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ nombre: nombre, activo: true })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            input.value = '';
-            showSuccess('Cartera agregada correctamente');
-            loadCarteras();
-            // Recargar filtros de cartera en el dashboard
-            loadCarteraFilter();
-        } else {
-            showError(result.error || 'Error al agregar cartera');
-        }
-    } catch (error) {
-        console.error('Error agregando cartera:', error);
-        showError('Error al agregar cartera');
-    }
-}
-
-// Eliminar/desactivar cartera
-async function deleteCartera(carteraId, nombre, activo) {
-    const accion = activo ? 'desactivar' : 'eliminar';
-    if (!confirm(`¿Estás seguro de que deseas ${accion} la cartera "${nombre}"?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/carteras/${carteraId}`, {
-            method: 'DELETE',
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            showSuccess(result.message || 'Cartera procesada correctamente');
-            loadCarteras();
-            // Recargar filtros de cartera en el dashboard
-            loadCarteraFilter();
-        } else {
-            showError(result.error || 'Error al procesar cartera');
-        }
-    } catch (error) {
-        console.error('Error eliminando cartera:', error);
-        showError('Error al eliminar cartera');
-    }
-}
-
 // Cargar filtro de carteras dinámicamente
 async function loadCarteraFilter() {
     try {
-        const response = await fetch('/api/carteras');
+        const response = await adminFetch('/api/carteras');
         if (!response.ok) return;
         const carteras = await response.json();
         
